@@ -24,7 +24,7 @@ const draw: Draw = (ctx, t) => {
   }
   const [x, y] = slotXY(0);
   const drop = easeOut(p(t, 396, 410));
-  if (t >= 396) monster(ctx, x + SLOT_W / 2, y + SLOT_H - 10 - Math.round((1 - drop) * 40), 3, 0.05 * Math.sin(t * 0.2));
+  if (t >= 396) monster(ctx, x + SLOT_W / 2, y + SLOT_H - 12 - Math.round((1 - drop) * 40), 3, 0.05 * Math.sin(t * 0.2));
 };
 
 export const Ending: React.FC = () => {
@@ -81,7 +81,7 @@ export const Ending: React.FC = () => {
       {t >= 360 && (
         <>
           <Txt x={240} y={26} size={96} align="center">
-            人生 <span style={{ color: P.orange }}>bug</span> 图鉴
+            人生 <span style={{ color: P.sky }}>bug</span> 图鉴
           </Txt>
           {Array.from({ length: 8 }, (_, i) => {
             if (t < 366 + i * 3) return null;

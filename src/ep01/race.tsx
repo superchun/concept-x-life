@@ -8,8 +8,8 @@ import { ANNEAL, ANNEAL_RUNS, CLIMB, CLIMB_END, CLIMB_STEPS, HERO, MAIN, N, PEAK
 import { bubble, colOf, cx, drawSky, drawTerrain, firework, flag, footY, guy, peakCol, pilePos, type Lane } from './world';
 
 // 上下两条赛道是同一张地图：上面用旧规则，下面用新规则
-const OLD: Lane = { base: 112, hmax: 64 };
-const NEW: Lane = { base: 206, hmax: 64 };
+const OLD: Lane = { base: 120, hmax: 70 };
+const NEW: Lane = { base: 224, hmax: 70 };
 const START = 40;
 const END = 470;
 
@@ -68,7 +68,7 @@ const draw: Draw = (ctx, t) => {
     const k = peakOf(CLIMB_END[i]);
     const arrived = t >= START && Math.abs(x - CLIMB_END[i]) < 1e-6;
     const [px, py] = arrived ? pilePos(k, OLD_SLOT[i], OLD) : [cx(colOf(x)), footY(colOf(x), OLD)];
-    guy(ctx, px, OLD.base - 90 + (py - OLD.base + 90) * fall * fall, 4, arrived ? (k === MAIN ? P.lime : P.slate) : P.grey, arrived ? 0 : Math.floor(t / 4) + i);
+    guy(ctx, px, OLD.base - 90 + (py - OLD.base + 90) * fall * fall, 4, arrived ? (k === MAIN ? P.lime : P.slate) : [P.grey, P.sky, P.cyan][i % 3], arrived ? 0 : Math.floor(t / 4) + i);
   }
   if (t >= 170) PEAKS.forEach((_, k) => k !== MAIN && bubble(ctx, cx(peakCol(k)), footY(peakCol(k), OLD) - 18, t));
   if (oldCount(t) > 0) flag(ctx, cx(peakCol(MAIN)) + 14, footY(peakCol(MAIN) + 3, OLD), P.lime, t);
@@ -85,10 +85,15 @@ const draw: Draw = (ctx, t) => {
     const x = ANNEAL_RUNS[i][s];
     const [px, py] = done ? pilePos(MAIN, NEW_SLOT[i], NEW, 17) : [cx(colOf(x)), footY(colOf(x), NEW)];
     const lost = t >= END && !done;
-    const color = done ? P.lime : lost ? P.orange : heat > 0.5 ? P.orange : heat > 0.15 ? P.yellow : P.white;
-    guy(ctx, px, NEW.base - 90 + (py - NEW.base + 90) * fall * fall, 4, color, done || lost ? 0 : Math.floor(t / 2) + i);
+    const color = done ? [P.lime, P.yellow, P.cyan][NEW_SLOT[i] % 3] : lost ? P.orange : heat > 0.5 ? P.orange : heat > 0.15 ? P.yellow : P.grey;
+    // 登顶的人轮流蹦一下
+    const hop = done && (t + NEW_SLOT[i] * 5) % 18 < 4 ? 2 : 0;
+    guy(ctx, px, NEW.base - 90 + (py - NEW.base + 90) * fall * fall - hop, 4, color, done || lost ? 0 : Math.floor(t / 2) + i);
     if (lost && t >= END + 20) bubble(ctx, px, py - 7, t);
-    if (SETTLE[i] >= 0) firework(ctx, cx(peakCol(MAIN)) + ((i * 37) % 60) - 30, footY(peakCol(MAIN), NEW) - 24 - ((i * 13) % 22), t - arriveFrame(i), i);
+    if (SETTLE[i] >= 0) {
+      const top = footY(peakCol(MAIN), NEW);
+      firework(ctx, cx(peakCol(MAIN)) + ((i * 37) % 150) - 75, top - 30 - ((i * 13) % 34), t - arriveFrame(i) - 8, i, 1.5, top - 10);
+    }
   }
   if (newCount(t) > 0) flag(ctx, cx(peakCol(MAIN)) + 14, footY(peakCol(MAIN) + 3, NEW), P.yellow, t);
   ctx.restore();
@@ -101,18 +106,20 @@ export const Race: React.FC = () => {
   const heat = heatAt(t);
   const a = oldCount(t);
   const b = newCount(t);
+  // 计数每涨一次弹一下
+  const pop = b > newCount(t - 3) ? 1.25 : 1;
   return (
     <AbsoluteFill>
       <PixelCanvas draw={drawCb} />
       <Txt x={16} y={24} size={48} color={P.grey}>旧规则　只能往上走</Txt>
-      <Txt x={464} y={22} size={72} align="right" color={P.grey}>
+      <Txt x={136} y={20} size={72} color={P.grey}>
         登顶 {a}
       </Txt>
-      <Txt x={16} y={120} size={48} color={P.lime}>新规则　允许走下坡</Txt>
-      <Txt x={464} y={118} size={72} align="right" color={P.lime}>
+      <Txt x={16} y={128} size={48} color={P.lime}>新规则　允许走下坡</Txt>
+      <Txt x={136} y={121} size={96} color={P.lime} scale={pop}>
         登顶 {b}
       </Txt>
-      <div style={{ position: 'absolute', left: 16 * S, top: 136 * S, display: 'flex', alignItems: 'center', gap: S, opacity: p(t, START, START + 6) }}>
+      <div style={{ position: 'absolute', left: 16 * S, top: 144 * S, display: 'flex', alignItems: 'center', gap: S, opacity: p(t, START, START + 6) }}>
         <span style={{ fontFamily: '"Fusion Pixel"', fontSize: 36, color: P.white, marginRight: 12 }}>温度</span>
         {Array.from({ length: 20 }, (_, i) => (
           <span key={i} style={{ width: 4 * S, height: 5 * S, background: i < Math.round(heat * 20) ? (i > 12 ? P.red : i > 5 ? P.orange : P.yellow) : P.dark }} />

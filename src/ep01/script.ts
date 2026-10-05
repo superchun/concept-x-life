@@ -22,15 +22,15 @@ export const STAGES: [string, number][] = [
   ['结论', 34],
 ];
 
-// 开头六条症状，每条一屏 2 秒
+// 开头六条症状，每条一屏 2 秒：左边小动画，右边两行大字
 export const SYMPTOM_FRAMES = 60;
-export const SYMPTOMS = [
-  '外卖，永远点那三家。',
-  '歌单，三年没换过。',
-  '理发，只会说「跟上次一样」。',
-  '回家，永远走同一条路。',
-  '想辞职两年了，简历还没改。',
-  '和 TA 不算开心，但也挑不出错。',
+export const SYMPTOMS: [string, string][] = [
+  ['外卖', '永远点那三家'],
+  ['歌单', '三年没换过'],
+  ['理发', '只会说「跟上次一样」'],
+  ['回家', '永远走同一条路'],
+  ['想辞职两年了', '简历还没改'],
+  ['和 TA 不算开心', '但也挑不出错'],
 ];
 
 const line = (bar: number, text: string, tone?: DialogLine['tone'], len = 1): DialogLine => ({
@@ -42,7 +42,6 @@ const line = (bar: number, text: string, tone?: DialogLine['tone'], len = 1): Di
 
 // 旁白里的数字直接来自仿真结果，不手写
 export const LINES: DialogLine[] = [
-  ...SYMPTOMS.map((text, i) => ({ at: i * SYMPTOM_FRAMES, dur: SYMPTOM_FRAMES - 2, text })),
   line(4, '这不是六个毛病。是[同一个 bug]。'),
   line(5, '《人生 bug 图鉴》第 001 号：[局部最优]。'),
 

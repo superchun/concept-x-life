@@ -156,7 +156,7 @@ const DRAWS = [drawTakeout, drawPlaylist, drawHaircut, drawCommute, drawResume, 
 
 const Extras: React.FC<{ i: number }> = ({ i }) => {
   const f = useCurrentFrame();
-  if (i === 0) return <Txt x={296} y={50} size={48} color={P.yellow} scale={punch(f, 38)} opacity={f >= 38 ? 1 : 0}>第 147 次</Txt>;
+  if (i === 0) return <Txt x={292} y={44} size={48} color={P.yellow} scale={punch(f, 38)} opacity={f >= 38 ? 1 : 0}>第 147 次</Txt>;
   if (i === 1) return <Txt x={240} y={170} size={48} align="center" color={P.grey}>已循环 {1205 + Math.floor(f / 20)} 次</Txt>;
   if (i === 2) {
     return (
@@ -200,7 +200,7 @@ const Combo: React.FC<{ i: number }> = ({ i }) => {
   const draw: Draw = useCallback(
     (ctx, fr) => {
       const k = fr >= 36 ? i + 1 : i;
-      for (let j = 0; j < k; j++) monster(ctx, 26 + j * 18, 40 - (j === i ? Math.round(6 * Math.sin(clamp01((fr - 36) / 10) * Math.PI)) : 0), 1);
+      for (let j = 0; j < k; j++) monster(ctx, 30 + j * 20, 252 - (j === i ? Math.round(6 * Math.sin(clamp01((fr - 36) / 10) * Math.PI)) : 0), 1);
     },
     [i],
   );
@@ -208,7 +208,7 @@ const Combo: React.FC<{ i: number }> = ({ i }) => {
     <>
       <PixelCanvas draw={draw} />
       {n > 0 && (
-        <Txt x={464} y={28} size={48} align="right" color={P.orange} scale={i + 1 === n ? Math.max(1, punch(f, 36)) : 1}>
+        <Txt x={464} y={232} size={72} align="right" color={P.sky} scale={i + 1 === n ? Math.max(1, punch(f, 36)) : 1}>
           老样子 ×{n}
         </Txt>
       )}
@@ -227,14 +227,28 @@ export const Symptoms: React.FC = () => (
   </AbsoluteFill>
 );
 
+const SHIFT = 90;
+const drawPanel: Draw = (ctx) => {
+  ctx.fillStyle = P.dark;
+  ctx.fillRect(20, 26, 252, 196);
+  ctx.fillStyle = '#20233a';
+  ctx.fillRect(22, 28, 248, 192);
+};
+
 const Screen: React.FC<{ i: number }> = ({ i }) => {
   const f = useCurrentFrame();
-  const slide = (1 - easeOut(p(f, 0, 6))) * LW * S;
+  const slide = Math.round(((1 - easeOut(p(f, 0, 6))) * LW) / 2) * S * 2;
+  const [head, tail] = SYMPTOMS[i];
   return (
     <AbsoluteFill>
-      <AbsoluteFill style={{ transform: `translateX(${Math.round(slide / S) * S}px)` }}>
-        <PixelCanvas draw={DRAWS[i]} />
-        <Extras i={i} />
+      <AbsoluteFill style={{ transform: `translateX(${slide}px)` }}>
+        <PixelCanvas draw={drawPanel} />
+        <AbsoluteFill style={{ transform: `translate(${-SHIFT * S}px, ${4 * S}px)` }}>
+          <PixelCanvas draw={DRAWS[i]} />
+          <Extras i={i} />
+        </AbsoluteFill>
+        <Txt x={284} y={84} size={96} color={P.yellow} scale={punch(f, 3)} opacity={f >= 3 ? 1 : 0}>{head}</Txt>
+        <Txt x={284} y={124} size={72} scale={punch(f, 12)} opacity={f >= 12 ? 1 : 0}>{tail}</Txt>
       </AbsoluteFill>
       <Combo i={i} />
     </AbsoluteFill>
@@ -255,7 +269,7 @@ const drawTitle: Draw = (ctx, f) => {
   if (f < 32) {
     for (let j = 0; j < 6; j++) {
       const t = ease(p(f, 2 + j * 3, 22 + j * 3));
-      monster(ctx, lerp(26 + j * 18, 130, t), lerp(40, 150, t) - Math.sin(t * Math.PI) * 30, 1);
+      monster(ctx, lerp(30 + j * 20, 130, t), lerp(252, 150, t) - Math.sin(t * Math.PI) * 40, 1);
     }
     return;
   }
@@ -265,7 +279,7 @@ const drawTitle: Draw = (ctx, f) => {
     return;
   }
   const land = clamp01((f - 36) / 10);
-  monster(ctx, 130, 164 - Math.round(Math.sin(land * Math.PI) * 8), 6, f > 46 ? 0.04 * Math.sin(f * 0.2) : 0);
+  monster(ctx, 130, 166 - Math.round(Math.sin(land * Math.PI) * 8), 5, f > 46 ? 0.04 * Math.sin(f * 0.2) : 0);
 };
 
 export const Title: React.FC = () => {
@@ -273,7 +287,7 @@ export const Title: React.FC = () => {
   return (
     <AbsoluteFill>
       <PixelCanvas draw={drawTitle} />
-      {f >= 44 && <Txt x={236} y={64} size={72} color={P.orange} scale={punch(f, 44)}>BUG-001</Txt>}
+      {f >= 44 && <Txt x={236} y={64} size={72} color={P.sky} scale={punch(f, 44)}>BUG-001</Txt>}
       {f >= 96 && <Txt x={234} y={90} size={192} scale={punch(f, 96)}>局部最优</Txt>}
       {f >= 120 && <Txt x={236} y={150} size={48} color={P.grey}>每一步都在变好，却到不了最好。</Txt>}
     </AbsoluteFill>

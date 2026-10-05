@@ -3,9 +3,9 @@ import { useCurrentFrame } from 'remotion';
 import { p } from './math';
 import { FONT, P, S } from './theme';
 
-// bug = 橙色，fix = 绿色
+// bug = 蓝色（和怪物同色），fix = 绿色
 export type Tone = 'bug' | 'fix';
-const toneColor = (tone: Tone) => (tone === 'fix' ? P.lime : P.orange);
+const toneColor = (tone: Tone) => (tone === 'fix' ? P.lime : P.sky);
 
 type Seg = { chars: string[]; hi: boolean; idx: number };
 
@@ -106,24 +106,25 @@ export const Dialog: React.FC<{ lines: DialogLine[] }> = ({ lines }) => {
       style={{
         position: 'absolute',
         left: 64,
-        top: 872,
+        top: 928,
         width: 1792,
-        height: 176,
+        height: 128,
         boxSizing: 'border-box',
         border: `8px solid ${P.white}`,
         outline: `8px solid ${P.ink}`,
         background: P.ink,
-        padding: '22px 44px',
+        padding: '0 44px',
         fontFamily: FONT,
-        fontSize: 48,
-        lineHeight: '60px',
+        fontSize: 60,
+        lineHeight: '112px',
+        whiteSpace: 'nowrap',
         color: P.white,
         opacity: p(frame, l.at, l.at + 2),
       }}
     >
       <Typed key={l.at} text={l.text} start={l.at + 2} tone={l.tone} />
       {done && frame % 24 < 14 && (
-        <span style={{ position: 'absolute', right: 30, bottom: 12, fontSize: 36, color: P.yellow }}>▼</span>
+        <span style={{ position: 'absolute', right: 30, bottom: -24, fontSize: 36, color: P.yellow }}>▼</span>
       )}
     </div>
   );

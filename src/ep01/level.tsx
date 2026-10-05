@@ -66,7 +66,7 @@ const draw: Draw = (ctx, t) => {
       const k = peakOf(CLIMB_END[i]);
       const arrived = Math.abs(x - CLIMB_END[i]) < 1e-6 && t >= 400;
       const [px, py] = arrived ? pilePos(k, SLOT[i], G) : [cx(colOf(x)), footY(colOf(x), G)];
-      const color = t >= 540 && k === MAIN ? P.lime : t >= 630 && k !== MAIN ? P.slate : i % 2 ? P.white : P.grey;
+      const color = t >= 540 && k === MAIN ? P.lime : t >= 630 && k !== MAIN ? P.slate : [P.grey, P.sky, P.cyan][i % 3];
       guy(ctx, px, lerp(-12, py, fall * fall), 4, color, arrived ? 0 : Math.floor(t / 4) + i);
     }
     if (t >= 630) {
@@ -94,7 +94,7 @@ const draw: Draw = (ctx, t) => {
   }
   const moving = (t >= 95 && t < 175) || (running && t < T_COOL);
   guy(ctx, cx(col), footY(col, G), t < 275 ? 6 : 8, color, moving ? Math.floor(t / 3) : 0);
-  if (t >= 245 && t < 720) bubble(ctx, cx(col), footY(col, G) - 11, t - 245);
+  if (t >= 245 && t < 720) bubble(ctx, cx(col), footY(col, G) - 12, t - 245);
   if (t >= 1840) {
     flag(ctx, cx(col) + 6, footY(col, G), P.yellow, t);
     for (let i = 0; i < 4; i++) firework(ctx, cx(col) + [-18, 14, -6, 22][i], footY(col, G) - 26 - i * 5, t - 1846 - i * 9, i * 2);

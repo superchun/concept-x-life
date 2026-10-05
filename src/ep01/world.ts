@@ -4,7 +4,7 @@ import { PEAKS, f } from './sim';
 
 // 关卡地形：x∈[0,1] 切成 NCOL 列，每列 4 像素宽。Lane 决定地面高度和山的最大高度。
 export type Lane = { base: number; hmax: number };
-export const MAIN_LANE: Lane = { base: 204, hmax: 108 };
+export const MAIN_LANE: Lane = { base: 222, hmax: 120 };
 export const X0 = 16;
 export const CW = 4;
 export const NCOL = 112;
@@ -36,7 +36,7 @@ export const drawSky = (ctx: CanvasRenderingContext2D, fr: number, hills = true,
   for (let x = 0; x < LW; x++) {
     const u = x + shift;
     const h = Math.round(34 + 14 * Math.sin(u * 0.021) + 8 * Math.sin(u * 0.057 + 1));
-    ctx.fillRect(x, 204 - h, 1, h);
+    ctx.fillRect(x, 222 - h, 1, h);
   }
 };
 
@@ -63,7 +63,8 @@ export const drawTerrain = (ctx: CanvasRenderingContext2D, g: Lane) => {
   }
 };
 
-// 小人：方身子、两只眼睛、两条会交替的腿。x 是中心，y 是脚底。
+// 小人。x 是中心，y 是脚底。size ≤ 4 画 3×5 的小号（头 + 上衣 + 腿），否则画 5×10 的大号（带帽子）。
+// color 是衣服和帽子的颜色，头一直是白的。
 export const guy = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -72,16 +73,32 @@ export const guy = (
   color: string,
   step = 0,
 ) => {
-  const l = Math.round(x - size / 2);
-  const t = Math.round(y) - size - 1;
+  if (size <= 4) {
+    const l = Math.round(x) - 1;
+    const t = Math.round(y) - 5;
+    ctx.fillStyle = P.white;
+    ctx.fillRect(l, t, 3, 2);
+    ctx.fillStyle = color;
+    ctx.fillRect(l, t + 2, 3, 2);
+    ctx.fillRect(step % 2 ? l + 1 : l, t + 4, 1, 1);
+    if (step % 2 === 0) ctx.fillRect(l + 2, t + 4, 1, 1);
+    return;
+  }
+  const l = Math.round(x) - 2;
+  const t = Math.round(y) - 10;
   ctx.fillStyle = color;
-  ctx.fillRect(l, t, size, size);
-  ctx.fillRect(l + (step % 2 ? 0 : 1), t + size, 1, 1);
-  ctx.fillRect(l + size - 1 - (step % 2 ? 1 : 0), t + size, 1, 1);
+  ctx.fillRect(l + 1, t, 3, 1);
+  ctx.fillRect(l, t + 1, 5, 1);
+  ctx.fillRect(l, t + 5, 5, 1);
+  ctx.fillRect(l + 1, t + 6, 3, 2);
+  ctx.fillStyle = P.white;
+  ctx.fillRect(l + 1, t + 2, 3, 3);
   ctx.fillStyle = P.ink;
-  const eh = size > 4 ? 2 : 1;
-  ctx.fillRect(l + 1, t + 1, 1, eh);
-  ctx.fillRect(l + size - 2, t + 1, 1, eh);
+  ctx.fillRect(l + 1, t + 3, 1, 1);
+  ctx.fillRect(l + 3, t + 3, 1, 1);
+  ctx.fillStyle = P.grey;
+  ctx.fillRect(l + 1, t + 8, 1, step % 2 ? 1 : 2);
+  ctx.fillRect(l + 3, t + 8, 1, step % 2 ? 2 : 1);
 };
 
 // 头顶的「…」气泡
@@ -140,21 +157,23 @@ export const sofa = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   ctx.fillRect(x + 5, y - 1, 1, 1);
 };
 
+// BUG-001：一只蓝色甲虫，有触角、斑点和六条腿
 const MONSTER = [
-  '....pppppp....',
-  '..pppppppppp..',
-  '.pppppppppppp.',
-  '.ppwwppppwwpp.',
-  'pppwkppppwkppp',
-  'pppppppppppppp',
-  'pppppkkkkppppp',
-  'rrrrrrrrrrrrrr',
-  '.rrrrrrrrrrrr.',
-  '..rr..rr..rr..',
+  '..a..........a..',
+  '...a........a...',
+  '....bbbbbbbb....',
+  '..bbbbbbbbbbbb..',
+  '.bbwwbbbbbbwwbb.',
+  '.bbwkbbssbbwkbb.',
+  'lbbbbbbssbbbbbbl',
+  '.bbsbbbbbbbbsbb.',
+  'lbbbbbbbbbbbbbbl',
+  '..dddddddddddd..',
+  '.l..l......l..l.',
 ];
-// BUG-001 的样子。x 是中心，y 是底边，scale 是每个格子画几个像素。
+// x 是中心，y 是底边，scale 是每个格子画几个像素
 export const monster = (ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, squash = 0) => {
-  const colors: Record<string, string> = { p: P.orange, r: P.red, w: P.white, k: P.ink };
+  const colors: Record<string, string> = { b: P.sky, d: P.blue, s: P.navy, a: P.grey, l: P.grey, w: P.white, k: P.ink };
   const sy = scale * (1 - squash);
   const sx = scale * (1 + squash);
   MONSTER.forEach((row, j) => {
@@ -162,7 +181,7 @@ export const monster = (ctx: CanvasRenderingContext2D, x: number, y: number, sca
       if (ch === '.') return;
       ctx.fillStyle = colors[ch];
       ctx.fillRect(
-        Math.round(x + (i - 7) * sx),
+        Math.round(x + (i - 8) * sx),
         Math.round(y - (MONSTER.length - j) * sy),
         Math.ceil(sx),
         Math.ceil(sy),
@@ -171,16 +190,31 @@ export const monster = (ctx: CanvasRenderingContext2D, x: number, y: number, sca
   });
 };
 
-// 一小簇像素烟花，age 是放出后过了几帧
-export const firework = (ctx: CanvasRenderingContext2D, x: number, y: number, age: number, seed: number) => {
-  if (age < 0 || age > 20) return;
+// 像素烟花：先一道上升的尾迹，再炸开。age 是炸开后过了几帧，size 控制炸多大。
+export const firework = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  age: number,
+  seed: number,
+  size = 1,
+  fromY = y,
+) => {
+  if (age < -8 || age > 22) return;
   const colors = [P.yellow, P.lime, P.cyan, P.orange, P.white];
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2 + seed;
-    const r = (i % 2 ? 0.9 : 0.55) * age;
-    if (age > 14 && i % 2) continue;
-    ctx.fillStyle = colors[(i + seed) % colors.length | 0] ?? P.yellow;
-    ctx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r + age * age * 0.02), 1, 1);
+  if (age < 0) {
+    ctx.fillStyle = P.white;
+    const ry = Math.round(y + (fromY - y) * (-age / 8));
+    ctx.fillRect(Math.round(x), ry, 1, 3);
+    return;
+  }
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2 + seed;
+    const r = (i % 2 ? 0.9 : 0.55) * age * size;
+    if (age > 15 && i % 2) continue;
+    ctx.fillStyle = colors[(i + seed) % colors.length];
+    const d = age < 6 ? 2 : 1;
+    ctx.fillRect(Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r + age * age * 0.02), d, d);
   }
 };
 
