@@ -218,15 +218,7 @@ export const thought = (ctx: CanvasRenderingContext2D, x: number, y: number, kin
   icon(ctx, kind, x + 0.5, t + 10);
 };
 
-// 两个帮手是灰色的主角，和床上的主角同一比例（小人放大 2 倍）。守门人举着一张画像；赶羊的拿一根杆子。
-const helper = (ctx: CanvasRenderingContext2D, x: number, y: number, step: number, blink: boolean, lying = false) => {
-  ctx.save();
-  ctx.translate(Math.round(x), Math.round(y) - (lying ? 5 : 0));
-  if (lying) ctx.rotate(-Math.PI / 2);
-  ctx.scale(2, 2);
-  guy(ctx, 0, 0, 8, P.slate, step, blink);
-  ctx.restore();
-};
+// 守门人是灰色的主角，和床上的主角同一比例（小人放大 2 倍），手里举着一张画像
 export const guard = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -235,19 +227,12 @@ export const guard = (
   blink = false,
   kind: IconKind = 'bear',
 ) => {
-  helper(ctx, x, y, step, blink);
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.scale(2, 2);
+  guy(ctx, 0, 0, 8, P.slate, step, blink);
+  ctx.restore();
   portrait(ctx, x + 12, y - 5, kind);
-};
-// lying：累倒了，躺在地上
-export const shepherd = (ctx: CanvasRenderingContext2D, x: number, y: number, step = 0, blink = false, lying = false) => {
-  helper(ctx, x, y, step, blink || lying, lying);
-  ctx.fillStyle = P.orange;
-  if (lying) {
-    ctx.fillRect(Math.round(x) - 4, Math.round(y) - 1, 22, 1);
-    return;
-  }
-  ctx.fillRect(Math.round(x) + 7, Math.round(y) - 22, 1, 22);
-  ctx.fillRect(Math.round(x) + 5, Math.round(y) - 23, 3, 1);
 };
 // 画像：一个小画框。x 是中心，y 是底边。
 export const portrait = (ctx: CanvasRenderingContext2D, x: number, y: number, kind: IconKind = 'bear') => {
@@ -280,10 +265,6 @@ export const zed = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   ctx.fillRect(Math.round(x) + 1, Math.round(y) + 1, 1, 1);
   ctx.fillRect(Math.round(x), Math.round(y) + 2, 3, 1);
 };
-
-const SHEEP = ['.wwwww..', 'wwwwwwkk', 'wwwwwwkk', '.wwwww..', '.d...d..'];
-export const sheep = (ctx: CanvasRenderingContext2D, x: number, y: number, step = 0, flip = false) =>
-  sprite(ctx, step % 2 ? SHEEP : [...SHEEP.slice(0, 4), '..d.d...'], x, y, 1, flip);
 
 // 铃。ring 为真时歪向一边，铃舌甩出来。x 是中心，y 是挂点。
 export const bell = (ctx: CanvasRenderingContext2D, x: number, y: number, ring = false) => {

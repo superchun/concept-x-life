@@ -16,8 +16,6 @@ import {
   hero,
   lock,
   portrait,
-  sheep,
-  shepherd,
   thought,
   zed,
   type IconKind,
@@ -315,12 +313,12 @@ export const Lab: React.FC = () => {
 };
 
 // ---- 卧室：第 12–33 小节，u 是这一段开始后的帧数（每小节 90 帧）----
-//    0 一样东西从门口进来，被关在门外   72 钉上牌子        96 第一个帮手赶羊
-//  186 第二个帮手守门                 205 推近看画像      270 金句一（字幕层盖住）
-//  455 删掉 485 盖住 515 骂自己        540 锁越加越多      630 赶羊的累倒
-//  720 门被挤开，熊涌进来             815 拉远到整栋楼    905 回到卧室
+//    0 一样东西从门口进来，被关在门外   72 钉上牌子        96 守门人出场
+//  205 推近看画像                    270 金句一（字幕层盖住）
+//  455 删掉 485 盖住 515 骂自己        540 锁越加越多      630 守门人撑不住了
+//  720 门被顶开，熊站在门口，气泡铺满屋子   815 拉远到整栋楼    905 回到卧室
 //  950 牌子移到中央                  1000 翻面           1050 牌子回到门上，天色转暖
-// 1090 撤掉帮手，别的熊散去          1170 熊走到床边坐下  1275 打哈欠  1310 趴下
+// 1090 守门人消失，气泡散掉           1170 熊走到床边坐下  1275 打哈欠  1310 趴下
 // 1370 主角闭眼                     1440 镜头经过另外三扇窗，各灭一盏灯
 // 1620 拉远到整栋楼，灯一扇扇灭，天亮  1800 金句二（字幕层盖住）
 const VISITS = (() => {
@@ -340,7 +338,20 @@ const bellCount = (u: number) =>
   VISITS.filter((t) => u >= t).length + (u >= 720 ? Math.floor((Math.min(u, 810) - 720) / 3) : 0);
 const lockCount = (u: number) =>
   u >= 720 ? 0 : (u >= 455 ? 1 : 0) + (u >= 485 ? 1 : 0) + (u >= 515 ? 1 : 0) + (u >= 540 ? Math.min(5, Math.floor((u - 540) / 18) + 1) : 0);
-const FLOOD_X = [176, 144, 112, 86];
+// 门被顶开后铺满屋子的气泡：[x, y, 第几个冒出来]（格）
+const SWARM = (() => {
+  const r = rng(41);
+  const out: [number, number][] = [];
+  while (out.length < 38) {
+    const x = 12 + r() * 216;
+    const y = 32 + r() * 68;
+    // 留出右上角的铃和门上的牌子
+    if (x > 172 && y < 64) continue;
+    out.push([Math.round(x), Math.round(y)]);
+  }
+  return out;
+})();
+const GUARD_X = 160;
 const KINDS: IconKind[] = ['note', 'talk', 'paper', 'face'];
 export const OFF_A = 1492;
 export const OFF_B = 1552;
@@ -364,7 +375,7 @@ const warmth = (u: number) =>
   0.12 * ease(p(u, 1040, 1170)) + 0.18 * ease(p(u, 1170, 1440)) + 0.7 * ease(p(u, 1620, 1790));
 
 const KEYS: [number, number, Cam][] = [
-  [205, 235, { x: 372, y: 160, z: 2 }],
+  [205, 235, { x: 360, y: 160, z: 2 }],
   [262, 292, ROOM],
   [815, 868, BUILDING],
   [905, 945, ROOM],
@@ -390,39 +401,33 @@ const drawHeroRoom = (ctx: CanvasRenderingContext2D, u: number) => {
   const open = u < 54 ? 1 : u < 68 ? 1 - ease(p(u, 54, 68)) : flood ? 1 : peek ? 0.6 : 0;
   door(ctx, DOORX, FLOOR, open);
   if (peek) thought(ctx, DOORX + 1, FLOOR - 8);
-  for (let k = 0; k < lockCount(u); k++) lock(ctx, DOORX - 5 + (k % 2) * 9, FLOOR - 26 + Math.floor(k / 2) * 7);
+  const rattle = u >= 630 && u < 720 && Math.floor(u / 2) % 2 ? 1 : 0;
+  for (let k = 0; k < lockCount(u); k++) lock(ctx, DOORX - 5 + (k % 2) * 9 + (k % 2 ? rattle : -rattle), FLOOR - 26 + Math.floor(k / 2) * 7);
   if (u >= 8) bell(ctx, 228, 16, peek || (flood && u < 812 && u % 6 < 3));
 
-  // 两个帮手
-  const helpers = 1 - p(u, 1090, 1112);
-  if (u >= 96 && helpers > 0) {
-    ctx.globalAlpha = helpers;
-    const hop = clamp01((u - 96) / 12);
+  // 铺满屋子的气泡：一个接一个冒出来，补丁之后一个接一个散掉
+  if (flood && u < 1132) {
+    SWARM.forEach(([x, y], k) => {
+      if (u >= 724 + k * 2 && u < 1092 + k) thought(ctx, x, y + (Math.sin(u * 0.08 + k) > 0 ? 0 : 1));
+    });
+  }
+  // 守门人：到后半夜撑不住，眼皮打架，身子往下滑
+  const fade = 1 - p(u, 1090, 1112);
+  if (u >= 96 && fade > 0) {
+    ctx.globalAlpha = fade;
+    const g = clamp01((u - 96) / 12);
     const tired = u >= 630;
-    const sx = lerp(BEDX + 12, 118, easeOut(hop));
-    shepherd(ctx, sx, FLOOR - Math.round(Math.sin(hop * Math.PI) * 10), 0, u % 80 < 4, tired);
-    if (tired) for (let k = 0; k < 2; k++) zed(ctx, 128 + k * 5, FLOOR - 14 - k * 6 - ((u / 6) % 4));
-    // 羊：在床和门之间来回走；赶羊的累倒后散开
-    for (let k = 0; k < 5; k++) {
-      const born = 104 + k * 8;
-      if (u < born) continue;
-      const drift = tired ? (u - 630) * (k % 2 ? 0.9 : -0.9) : 0;
-      const x = 128 + ((k * 9 + u * 0.35) % 40) + drift;
-      ctx.globalAlpha = helpers * (tired ? 1 - p(u, 650, 700) : 1);
-      sheep(ctx, x, FLOOR, Math.floor(u / 5) + k, tired && k % 2 === 0);
-    }
-    ctx.globalAlpha = helpers;
-    if (u >= 186) {
-      const g = clamp01((u - 186) / 12);
-      const kind: IconKind = u >= 210 && u < 262 ? [...KINDS, 'bear' as IconKind][Math.floor((u - 210) / 11) % 5] : 'bear';
-      guard(ctx, lerp(BEDX + 12, 176, easeOut(g)), FLOOR - Math.round(Math.sin(g * Math.PI) * 14), 0, u % 90 < 4, kind);
-    }
+    const sink = tired ? Math.min(3, Math.floor((u - 630) / 22)) : 0;
+    const shut = tired ? u >= 700 || (u - 630) % 30 < 18 : u % 90 < 4;
+    const kind: IconKind = u >= 210 && u < 262 ? [...KINDS, 'bear' as IconKind][Math.floor((u - 210) / 11) % 5] : 'bear';
+    guard(ctx, lerp(BEDX + 12, GUARD_X, easeOut(g)), FLOOR + sink - Math.round(Math.sin(g * Math.PI) * 14), 0, shut, kind);
+    if (u >= 690) for (let k = 0; k < 2; k++) zed(ctx, GUARD_X - 8 - k * 5, FLOOR - 26 - k * 6 - ((u / 6) % 4));
     ctx.globalAlpha = 1;
   }
   // 撤掉守门人之后，画像掉在地上
   if (u >= 1090 && u < 1150) {
     ctx.globalAlpha = 1 - p(u, 1130, 1150);
-    portrait(ctx, 188, Math.min(FLOOR, FLOOR - 5 + Math.round(((u - 1090) * (u - 1090)) / 40)));
+    portrait(ctx, GUARD_X + 12, Math.min(FLOOR, FLOOR - 5 + Math.round(((u - 1090) * (u - 1090)) / 40)));
     ctx.globalAlpha = 1;
   }
 
@@ -441,7 +446,7 @@ const drawHeroRoom = (ctx: CanvasRenderingContext2D, u: number) => {
       }
     }
   }
-  if (u >= 485 && u < 720) {
+  if (u >= 485 && u < 515) {
     // 盖住：举着手机，屏幕的光照在脸上
     ctx.fillStyle = 'rgba(115,239,247,0.14)';
     ctx.fillRect(BEDX - 22, FLOOR - 30, 22, 18);
@@ -450,36 +455,20 @@ const drawHeroRoom = (ctx: CanvasRenderingContext2D, u: number) => {
     ctx.fillStyle = P.grey;
     ctx.fillRect(BEDX - 7, FLOOR - 22, 1, 6);
   }
-  if ((peek && u < 720) || (flood && u < 1090)) {
-    thought(ctx, HEAD[0], HEAD[1]);
-    if (flood) {
-      thought(ctx, HEAD[0] + 17, HEAD[1] - 6);
-      thought(ctx, HEAD[0] - 15, HEAD[1] - 3);
-    }
-  }
-
-  // 熊：先是涌进来的一群，补丁之后只剩一只，走到床边坐下、打哈欠、趴下
+  // 熊：门被顶开后站在门口；补丁之后走到床边坐下、打哈欠、趴下
   if (flood) {
-    for (let k = FLOOD_X.length - 1; k >= 0; k--) {
-      const a = 722 + k * 14;
-      if (u < a) continue;
-      const gone = k === 0 ? 0 : p(u, 1090 + k * 4, 1120 + k * 4);
-      if (gone >= 1) continue;
-      ctx.globalAlpha = 1 - gone;
-      if (k > 0 || u < 1170) {
-        const t = ease(p(u, a, a + 44));
-        bear(ctx, lerp(DOORX + 6, FLOOD_X[k], t), FLOOR, 'walk', t < 1 ? Math.floor(u / 4) : 0);
-      } else if (u < 1214) {
-        bear(ctx, lerp(FLOOD_X[0], 108, ease(p(u, 1170, 1214))), FLOOR, 'walk', Math.floor(u / 4));
-      } else if (u < 1310) {
-        const yawn = u >= 1275 && u < 1302;
-        bear(ctx, 106, FLOOR - (yawn ? 1 : 0), yawn ? 'yawn' : 'sit');
-      } else {
-        bear(ctx, 108, FLOOR, 'sleep');
-        for (let j = 0; j < 2; j++) zed(ctx, 92 + j * 5, FLOOR - 16 - j * 6 - ((u / 6) % 4));
-      }
+    if (u < 1170) {
+      const t = ease(p(u, 722, 752));
+      bear(ctx, lerp(DOORX + 8, 190, t), FLOOR, 'walk', t < 1 ? Math.floor(u / 4) : 0);
+    } else if (u < 1214) {
+      bear(ctx, lerp(190, 108, ease(p(u, 1170, 1214))), FLOOR, 'walk', Math.floor(u / 4));
+    } else if (u < 1310) {
+      const yawn = u >= 1275 && u < 1302;
+      bear(ctx, 106, FLOOR - (yawn ? 1 : 0), yawn ? 'yawn' : 'sit');
+    } else {
+      bear(ctx, 108, FLOOR, 'sleep');
+      for (let j = 0; j < 2; j++) zed(ctx, 92 + j * 5, FLOOR - 16 - j * 6 - ((u / 6) % 4));
     }
-    ctx.globalAlpha = 1;
   }
   ctx.restore();
   if (u >= HERO_OFF) lightsOff(ctx, 0.35 * p(u, HERO_OFF, HERO_OFF + 20));

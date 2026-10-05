@@ -3,7 +3,7 @@ import { AbsoluteFill } from 'remotion';
 import { PixelCanvas, type Draw } from '../lib/PixelCanvas';
 import { Txt } from '../lib/Text';
 import { LH, LW, P } from '../lib/theme';
-import { bear, bed, bell, board, door, guard, hero, sheep, shepherd, thought } from './world';
+import { bear, bed, bell, board, door, guard, hero, thought } from './world';
 
 // 角色定妆图，不进成片。卧室里的东西和主角一样按 2 倍画，这里就是成片全景里的实际大小。
 const draw: Draw = (ctx) => {
@@ -15,13 +15,10 @@ const draw: Draw = (ctx) => {
   board(ctx, 52, 30, 68, 18);
   ctx.save();
   ctx.scale(2, 2);
-  // 上排：门、守门人、走路的熊、赶羊的帮手和羊、铃
+  // 上排：门、守门人、走路的熊、铃
   door(ctx, 26, 62, 0);
   guard(ctx, 60, 62);
   bear(ctx, 100, 62, 'walk');
-  shepherd(ctx, 140, 62);
-  sheep(ctx, 160, 62, 0);
-  sheep(ctx, 174, 62, 1);
   bell(ctx, 200, 30);
   bell(ctx, 220, 30, true);
   // 下排：床上的主角和念头气泡、坐着的熊、打哈欠、睡着、站着的主角
