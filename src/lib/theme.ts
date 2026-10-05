@@ -5,15 +5,18 @@ export const FPS = 30;
 export const BAR = 90;
 
 export type Rgb = [number, number, number];
-export const WHITE: Rgb = [242, 240, 234];
-export const COLD: Rgb = [124, 199, 255];
-export const HOT: Rgb = [255, 122, 61];
-export const BG = '#07080b';
+// 系列配色：墨蓝坐标纸底、米白线稿，青色和黄色两支荧光笔
+export const WHITE: Rgb = [238, 232, 216];
+export const COLD: Rgb = [92, 214, 200];
+export const HOT: Rgb = [255, 208, 60];
+export const INK: Rgb = [12, 22, 28];
+export const BG = '#0c161c';
 
 export const rgba = (c: Rgb, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 export const FONT = {
   serif: '"Songti SC","Noto Serif SC","Source Han Serif SC",serif',
+  sans: '"PingFang SC","Hiragino Sans GB","STHeiti",sans-serif',
   mono: '"SF Mono",Menlo,monospace',
   latin: '"Times New Roman",Georgia,serif',
 };

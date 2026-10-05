@@ -1,5 +1,5 @@
 import { lerp } from '../lib/math';
-import { FONT, H, W, rgba, type Rgb, WHITE } from '../lib/theme';
+import { BG, FONT, W, rgba, type Rgb, WHITE } from '../lib/theme';
 import { f } from './sim';
 import { BUMPS, FIELD, FIELD_SIM, f2 } from './sim2d';
 import { HOT, COLD } from '../lib/theme';
@@ -25,20 +25,36 @@ export const lerpCam = (a: Cam, b: Cam, t: number): Cam => ({
 });
 
 export const drawLandscape = (ctx: CanvasRenderingContext2D, cam: Cam, alpha = 1) => {
-  // 曲线下方的点阵，越往下越淡
-  const sp = 12;
-  for (let sx = sp / 2; sx < W; sx += sp) {
+  // 曲线下方的剖面线，往下渐隐
+  for (let sx = 7; sx < W; sx += 14) {
     const x = cam.cx + (sx - W / 2) / (cam.z * SX);
     if (x < -0.03 || x > 1.03) continue;
     const top = proj(x, f(x), cam)[1];
-    for (let k = 1; k < 16; k++) {
-      const sy = top + k * sp;
-      if (sy > H) break;
-      ctx.fillStyle = rgba(WHITE, alpha * 0.2 * (1 - k / 16));
-      ctx.fillRect(sx - 1, sy - 1, 2, 2);
-    }
+    const g = ctx.createLinearGradient(0, top, 0, top + 190);
+    g.addColorStop(0, rgba(WHITE, 0.2 * alpha));
+    g.addColorStop(1, rgba(WHITE, 0));
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(sx, top + 5);
+    ctx.lineTo(sx, top + 190);
+    ctx.stroke();
   }
-  ctx.save();
+  // 横轴和刻度
+  const [ax0, ay] = proj(-0.03, 0, cam);
+  const [ax1] = proj(1.03, 0, cam);
+  ctx.strokeStyle = rgba(WHITE, 0.3 * alpha);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(ax0, ay);
+  ctx.lineTo(ax1, ay);
+  for (let i = 0; i <= 20; i++) {
+    const [tx] = proj(i / 20, 0, cam);
+    ctx.moveTo(tx, ay);
+    ctx.lineTo(tx, ay + (i % 2 === 0 ? 14 : 7));
+  }
+  ctx.stroke();
+
   ctx.beginPath();
   for (let i = 0; i <= 520; i++) {
     const x = -0.03 + (i / 520) * 1.06;
@@ -46,14 +62,13 @@ export const drawLandscape = (ctx: CanvasRenderingContext2D, cam: Cam, alpha = 1
     if (i === 0) ctx.moveTo(sx, sy);
     else ctx.lineTo(sx, sy);
   }
-  ctx.strokeStyle = rgba(WHITE, 0.9 * alpha);
-  ctx.lineWidth = 2.2;
-  ctx.shadowColor = rgba(WHITE, 0.6 * alpha);
-  ctx.shadowBlur = 14;
+  ctx.strokeStyle = rgba(WHITE, 0.95 * alpha);
+  ctx.lineWidth = 2.8;
+  ctx.lineJoin = 'round';
   ctx.stroke();
-  ctx.restore();
 };
 
+// 实心点加一圈细环，像图纸上的标记点
 export const dot = (
   ctx: CanvasRenderingContext2D,
   sx: number,
@@ -63,15 +78,15 @@ export const dot = (
   alpha = 1,
 ) => {
   if (alpha <= 0.01) return;
-  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 5);
-  g.addColorStop(0, rgba(c, 0.55 * alpha));
-  g.addColorStop(1, rgba(c, 0));
-  ctx.fillStyle = g;
-  ctx.fillRect(sx - r * 5, sy - r * 5, r * 10, r * 10);
   ctx.fillStyle = rgba(c, alpha);
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = rgba(c, alpha * 0.4);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r + 4.5, 0, Math.PI * 2);
+  ctx.stroke();
 };
 
 export const label = (
@@ -83,7 +98,7 @@ export const label = (
 ) => {
   const alpha = o.alpha ?? 1;
   if (alpha <= 0.01) return;
-  ctx.font = `${o.weight ?? 600} ${o.size ?? 26}px ${o.font ?? FONT.serif}`;
+  ctx.font = `${o.weight ?? 600} ${o.size ?? 26}px ${o.font ?? FONT.sans}`;
   ctx.textAlign = o.align ?? 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = rgba(o.c ?? WHITE, alpha);
@@ -119,10 +134,10 @@ export const drawField = (ctx: CanvasRenderingContext2D, step: number, alpha = 1
     ctx.lineTo(rx, ry + 40);
     ctx.lineTo(lx, ry + 40);
     ctx.closePath();
-    ctx.fillStyle = '#07080b';
+    ctx.fillStyle = BG;
     ctx.fill();
     ridge();
-    ctx.strokeStyle = rgba(WHITE, alpha * (0.1 + 0.22 * y));
+    ctx.strokeStyle = rgba(WHITE, alpha * (0.14 + 0.26 * y));
     ctx.lineWidth = 1.2;
     ctx.stroke();
   }
@@ -164,7 +179,7 @@ export const drawField = (ctx: CanvasRenderingContext2D, step: number, alpha = 1
   if (glow > 0) {
     const [gx, gy] = proj2(BUMPS[0][0], BUMPS[0][1], BUMPS[0][2]);
     const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, 300);
-    g.addColorStop(0, rgba(mix(HOT, WHITE, 0.55), alpha * 0.24 * glow));
+    g.addColorStop(0, rgba(HOT, alpha * 0.2 * glow));
     g.addColorStop(1, rgba(HOT, 0));
     ctx.fillStyle = g;
     ctx.fillRect(gx - 300, gy - 300, 600, 600);

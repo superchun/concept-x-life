@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { Canvas, type Draw } from '../lib/Canvas';
-import { ParticleText } from '../lib/ParticleText';
 import { BigText, Reveal } from '../lib/Text';
 import { clamp01, ease, lerp, mix, p } from '../lib/math';
 import { COLD, FONT, HOT, WHITE, rgba } from '../lib/theme';
@@ -51,7 +50,7 @@ export const SceneA: React.FC = () => {
     const x = lerp(0.148, PEAKS[1][0], ease(p(fr, 8, 172)));
     if (fr >= 180 && fr < 270) probes(ctx, cam, 1, (fr - 180) / 90);
     const [hx, hy] = on(x, cam);
-    dot(ctx, hx, hy, lerp(9, 6, p(fr, 270, 335)), WHITE, p(fr, 4, 16));
+    dot(ctx, hx, hy, lerp(13, 8, p(fr, 270, 335)), HOT, p(fr, 4, 16));
     const a = p(fr, 322, 344);
     if (a > 0) {
       const [mx, my] = on(PEAKS[MAIN][0], cam);
@@ -65,38 +64,36 @@ export const SceneA: React.FC = () => {
     <AbsoluteFill>
       <Canvas draw={draw} />
       <div style={{ ...hud, left: 130, top: 110, opacity: p(frame, 6, 20) * (1 - p(frame, 262, 280)) }}>
-        <div style={{ fontSize: 30, color: rgba(WHITE, 0.55), letterSpacing: 4, fontFamily: FONT.serif }}>连续选对</div>
+        <div style={{ fontSize: 30, color: rgba(WHITE, 0.55), letterSpacing: 4, fontFamily: FONT.sans }}>连续选对</div>
         <div style={{ fontSize: 96, fontWeight: 700, marginTop: 6 }}>
           {days.toLocaleString('en-US')}
           <span style={{ fontSize: 40, marginLeft: 14, fontFamily: FONT.serif }}>天</span>
         </div>
-        <div style={{ fontSize: 32, color: rgba(COLD, 0.95), marginTop: 6, fontFamily: FONT.serif }}>向下 0 步</div>
+        <div style={{ fontSize: 32, color: rgba(COLD, 0.95), marginTop: 6, fontFamily: FONT.sans }}>向下 0 步</div>
       </div>
     </AbsoluteFill>
   );
 };
 
-// ---- B：标题 ----
+// ---- B：标题卡。左对齐的编号 + 概念名 + 一句话定义 ----
 export const SceneB: React.FC = () => {
   const frame = useCurrentFrame();
   return (
-    <AbsoluteFill>
-      <ParticleText text="局部最优" size={260} cy={470} color={WHITE} outAt={146} />
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 680,
-          textAlign: 'center',
-          fontFamily: FONT.latin,
-          fontSize: 30,
-          letterSpacing: 22,
-          color: rgba(WHITE, 0.6),
-          opacity: p(frame, 50, 72) * (1 - p(frame, 146, 166)),
-        }}
-      >
-        LOCAL OPTIMUM
+    <AbsoluteFill style={{ opacity: 1 - p(frame, 150, 168), color: rgba(WHITE) }}>
+      <div style={{ position: 'absolute', left: 230, top: 236 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, opacity: p(frame, 0, 14) }}>
+          <span style={{ fontFamily: FONT.mono, fontSize: 40, fontWeight: 700, color: rgba(HOT) }}>No.01</span>
+          <span style={{ width: lerp(0, 420, ease(p(frame, 6, 40))), height: 2, background: rgba(WHITE, 0.5) }} />
+        </div>
+        <div style={{ fontFamily: FONT.serif, fontWeight: 900, fontSize: 250, letterSpacing: 10, lineHeight: 1.35 }}>
+          <Reveal text="局部[最优]" start={10} tone="hot" perChar={7} />
+        </div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 32, letterSpacing: 16, color: rgba(WHITE, 0.55), opacity: p(frame, 50, 68) }}>
+          LOCAL OPTIMUM
+        </div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 600, fontSize: 46, letterSpacing: 3, marginTop: 56 }}>
+          <Reveal text="每一步都在变好，却到不了最好。" start={72} perChar={1.6} />
+        </div>
       </div>
     </AbsoluteFill>
   );
@@ -127,7 +124,7 @@ export const SceneC: React.FC = () => {
     const demoA = p(fr, 16, 30) * (1 - p(fr, 250, 268));
     if (demoA > 0) {
       const [sx, sy] = on(DEMO[Math.round(clamp01((fr - 100) / 110) * 120)], FULL);
-      dot(ctx, sx, sy, 7, WHITE, demoA);
+      dot(ctx, sx, sy, 9, HOT, demoA);
     }
     if (fr >= 270) {
       const blue = p(fr, 540, 572);
@@ -198,14 +195,14 @@ export const SceneD: React.FC = () => {
     });
     if (fr >= 360 && fr < 450) {
       probes(ctx, FULL, 3, (fr - 360) / 90, '');
-      const [vx, vy] = proj(0.635, 0.68, FULL);
+      const [vx, vy] = proj(0.602, 0.8, FULL);
       ['收入 ↓', '确定性 ↓', '面子 ↓'].forEach((s, i) => {
         const a = p(fr, 372 + i * 12, 386 + i * 12) * (1 - p(fr, 436, 450));
-        label(ctx, s, vx, vy + i * 52, { size: 36, c: COLD, alpha: a, weight: 700 });
+        label(ctx, s, vx, vy + i * 52, { size: 36, c: COLD, alpha: a, weight: 700, align: 'left' });
       });
     }
     const [hx, hy] = on(PEAKS[3][0], FULL);
-    dot(ctx, hx, hy, 7, WHITE, p(fr, 0, 30) * g);
+    dot(ctx, hx, hy, 9, HOT, p(fr, 0, 30) * g);
   }, []);
   return (
     <AbsoluteFill>
@@ -262,7 +259,7 @@ export const SceneE: React.FC = () => {
     }
     ctx.restore();
     const [hx, hy] = on(HERO.xs[s], FULL);
-    dot(ctx, hx, hy, 8, c, a * (1 - end * 0.3));
+    dot(ctx, hx, hy, 10, c, a * (1 - end * 0.3));
   }, []);
 
   const formulaT = ease(p(frame, 262, 296));
@@ -296,7 +293,6 @@ export const SceneE: React.FC = () => {
               borderRadius: 2,
               opacity: p(frame, 92, 104),
               background: rgba(mix(HOT, COLD, p(frame, 104, 166))),
-              boxShadow: `0 0 ${lerp(34, 6, p(frame, 104, 166))}px ${rgba(mix(HOT, COLD, p(frame, 104, 166)), 0.9)}`,
             }}
           />
         </div>
@@ -316,7 +312,7 @@ export const SceneE: React.FC = () => {
             opacity: p(frame, 184, 204) * (1 - p(frame, 800, 815)),
           }}
         >
-          <div style={{ fontSize: 150, textShadow: '0 0 40px rgba(255,255,255,0.3)' }}>
+          <div style={{ fontSize: 150 }}>
             P = e<sup style={{ fontSize: 84 }}>−Δ / T</sup>
           </div>
           <div
@@ -336,7 +332,7 @@ export const SceneE: React.FC = () => {
       )}
       {frame >= 270 && frame < 815 && (
         <div style={{ ...hud, right: 150, top: 110, textAlign: 'right', opacity: p(frame, 276, 296) * (1 - p(frame, 800, 815)) }}>
-          <div style={{ fontSize: 30, color: rgba(WHITE, 0.55), letterSpacing: 4, fontFamily: FONT.serif }}>温度 T</div>
+          <div style={{ fontSize: 30, color: rgba(WHITE, 0.55), letterSpacing: 4, fontFamily: FONT.sans }}>温度 T</div>
           <div style={{ fontSize: 84, fontWeight: 700, color: rgba(mix(WHITE, HOT, clamp01(heat * 1.2))) }}>
             {T.toFixed(3)}
           </div>
@@ -347,7 +343,6 @@ export const SceneE: React.FC = () => {
                 height: 6,
                 marginLeft: 'auto',
                 background: rgba(mix(WHITE, HOT, clamp01(heat * 1.2))),
-                boxShadow: `0 0 16px ${rgba(HOT, 0.8 * clamp01(heat))}`,
               }}
             />
           </div>
@@ -366,12 +361,11 @@ export const SceneE: React.FC = () => {
                   fontSize: r.size,
                   fontWeight: 700,
                   color: rgba(r.c),
-                  textShadow: `0 0 26px ${rgba(r.c, 0.6)}`,
                 }}
               >
                 {Math.round(r.n * ease(p(frame, r.at, r.at + 30)))}
               </span>
-              <span style={{ fontSize: 32, color: rgba(WHITE, 0.55), fontFamily: FONT.serif }}>/ {N} 到达最高点</span>
+              <span style={{ fontSize: 32, color: rgba(WHITE, 0.55), fontFamily: FONT.sans }}>/ {N} 到达最高点</span>
             </div>
           ))}
         </div>
@@ -416,7 +410,7 @@ export const SceneG: React.FC = () => {
           out={268}
           lines={[
             { text: '只肯往上走的人，', at: 98, tone: 'hot' },
-            { text: '[到不了最高的地方。]', at: 150, size: 116, tone: 'hot' },
+            { text: '[到不了最高的地方]。', at: 150, size: 116, tone: 'hot' },
           ]}
         />
       )}
@@ -447,25 +441,25 @@ export const SceneG: React.FC = () => {
         </div>
       )}
       {frame >= 450 && (
-        <AbsoluteFill style={{ opacity: 1 - p(frame, 596, 628) }}>
-          <ParticleText text="下坡" size={300} cy={400} color={mix(WHITE, HOT, 0.8)} />
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: 622,
-              textAlign: 'center',
-              color: rgba(WHITE, 0.6),
-              opacity: p(frame, 500, 520),
-            }}
-          >
-            <div style={{ fontFamily: FONT.latin, fontSize: 28, letterSpacing: 12 }}>LOCAL OPTIMUM · 局部最优</div>
-            <div style={{ fontFamily: FONT.latin, fontStyle: 'italic', fontSize: 36, marginTop: 14 }}>
-              P = e<sup style={{ fontSize: 18 }}>−Δ / T</sup>
+        <AbsoluteFill style={{ opacity: 1 - p(frame, 598, 628), color: rgba(WHITE), textAlign: 'center' }}>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 330 }}>
+            <div style={{ fontFamily: FONT.serif, fontWeight: 900, fontSize: 150, letterSpacing: 12 }}>
+              <Reveal text="概念[×]人生" start={456} tone="hot" perChar={4} />
             </div>
-            <div style={{ fontFamily: FONT.serif, fontWeight: 700, fontSize: 46, color: rgba(WHITE), marginTop: 44, letterSpacing: 3 }}>
-              <Reveal text="致每一个，还敢走[下坡]的人。" start={524} tone="hot" />
+            <div
+              style={{
+                fontFamily: FONT.mono,
+                fontSize: 30,
+                letterSpacing: 8,
+                color: rgba(WHITE, 0.6),
+                marginTop: 30,
+                opacity: p(frame, 486, 504),
+              }}
+            >
+              No.01 · 局部最优 · LOCAL OPTIMUM
+            </div>
+            <div style={{ fontFamily: FONT.sans, fontWeight: 600, fontSize: 44, letterSpacing: 3, marginTop: 70 }}>
+              <Reveal text="关注我，下一期换一个概念看人生。" start={510} tone="hot" />
             </div>
           </div>
         </AbsoluteFill>
