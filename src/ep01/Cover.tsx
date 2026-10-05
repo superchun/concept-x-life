@@ -6,7 +6,7 @@ import { FONT, LH, LW, P, S } from '../lib/theme';
 import { drawMotes, drawSky, flag, hero, monster, shop, sofa } from './world';
 
 // 封面，横竖各一张，画的是同一件事：他站在小山顶上，身后是一座高得多的山。
-// 横版 1920×1080：抖音主页的网格会把它裁成竖条，所以标题、小人和高山的山顶都压在中间。
+// 横版 1920×1080：抖音主页的网格只显示中间 810 像素宽的竖条，所有内容都要落在 x 555–1365 之内。
 // 竖版 1080×1920：重要的东西都放在中间 3:4 的范围里，全屏和网格两种裁法都不会切到。
 type Layout = {
   lw: number;
@@ -16,17 +16,17 @@ type Layout = {
   bug: [number, number];
   man: number; // 主角放大几倍
   title: { top: number; left: number; size: number };
-  label: { top: number; left: number };
+  label: { top: number; left: number; size: number };
 };
 const WIDE: Layout = {
   lw: LW,
   lh: LH,
-  hill: [236, 226, 44, 44],
-  peak: [338, 226, 200, 40],
-  bug: [148, 254],
+  hill: [192, 226, 40, 34],
+  peak: [296, 226, 116, 30],
+  bug: [156, 254],
   man: 4,
-  title: { top: 110, left: -90, size: 144 },
-  label: { top: 980, left: 60 },
+  title: { top: 44, left: 0, size: 132 },
+  label: { top: 984, left: 40, size: 36 },
 };
 const TALL: Layout = {
   lw: 270,
@@ -36,7 +36,7 @@ const TALL: Layout = {
   bug: [28, 418],
   man: 6,
   title: { top: 250, left: 0, size: 168 },
-  label: { top: 1624, left: 44 },
+  label: { top: 1624, left: 44, size: 48 },
 };
 
 const topAt = ([cx, base, h, w]: number[], x: number) => base - Math.round((h * Math.exp(-(((x - cx) / w) ** 2))) / 2) * 2;
@@ -65,8 +65,8 @@ const drawCover = (L: Layout): Draw => (ctx) => {
   // 前面这座小山，和山顶上的家当
   hill(ctx, L.hill, L.lw, P.dark, P.lime, 0.16);
   const [hx] = L.hill;
-  shop(ctx, hx - 28, topAt(L.hill, hx - 28) + 1);
-  sofa(ctx, hx + 28, topAt(L.hill, hx + 28) + 1);
+  shop(ctx, hx - 26, topAt(L.hill, hx - 26) + 1);
+  sofa(ctx, hx + 26, topAt(L.hill, hx + 26) + 1);
   hero(ctx, hx, topAt(L.hill, hx), L.man, P.yellow, 0, 9);
   monster(ctx, L.bug[0], L.bug[1], 2);
 };
@@ -86,7 +86,7 @@ const CoverOf: React.FC<{ L: Layout }> = ({ L }) => {
           <Rich text="是[「更好」]" tone="fix" />
         </div>
       </AbsoluteFill>
-      <div style={{ position: 'absolute', left: L.label.left, width: L.lw * S, top: L.label.top, textAlign: 'center', fontFamily: FONT, fontSize: 48, lineHeight: '48px', color: P.white }}>
+      <div style={{ position: 'absolute', left: L.label.left, width: L.lw * S, top: L.label.top, textAlign: 'center', fontFamily: FONT, fontSize: L.label.size, lineHeight: '48px', color: P.white }}>
         人生 <span style={{ color: P.sky }}>bug</span> 图鉴 · 001 局部最优
       </div>
     </AbsoluteFill>
