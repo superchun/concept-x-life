@@ -70,13 +70,14 @@ const drawTea: Draw = (ctx, f) => {
   ctx.fillRect(150, 168, 172, 2);
   if (f < BACK) {
     const k = f < 8 ? 4 : f < 13 ? 3 : f < 17 ? 2 : f < 21 ? 1 : 0;
-    if (k) cup(ctx, 236, 160 - (4 - k) * 14, P.orange, k);
+    if (k) cup(ctx, 236, 166 - 2 * k, P.orange, k);
     return;
   }
   [176, 236, 296].forEach((x, i) => {
     const t = clamp01((f - BACK - i * 2) / 8);
     if (f < BACK + i * 2) return;
-    cup(ctx, x, 160 - Math.round(Math.sin(t * Math.PI) * 10), i === 1 ? P.orange : i ? P.red : P.green, i === 1 ? 4 : 3);
+    const k = i === 1 ? 4 : 3;
+    cup(ctx, x, 166 - 2 * k - Math.round(Math.sin(t * Math.PI) * 10), i === 1 ? P.orange : i ? P.red : P.green, k);
   });
 };
 
@@ -102,7 +103,12 @@ const drawStage: Draw = (ctx, f) => {
   for (let j = 0; j < 4; j++) for (let i = 0; i < 3; i++) ctx.fillRect(x - 7 + i * 6, 66 + j * 6, 3, 3);
   fist(ctx, x, 132);
   // 另一只手从右边按上来，弹回来时被甩开
-  if (f >= 8 && !back) fist(ctx, Math.round(lerp(330, 262, ease(p(f, 8, 18)))), 126);
+  if (f >= 8 && !back) {
+    const hx = Math.round(lerp(330, 262, ease(p(f, 8, 18))));
+    ctx.fillStyle = P.slate;
+    ctx.fillRect(hx + 15, 116, 360 - hx - 15, 20);
+    fist(ctx, hx, 126);
+  }
   if (back) {
     ctx.fillStyle = P.white;
     const flick = Math.floor(f / 2) % 2;
@@ -113,16 +119,16 @@ const drawStage: Draw = (ctx, f) => {
   }
 };
 
-// 4 下班：合上电脑；弹回来屏幕自己打开，邮件跳出来
-const envelope = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+// 4 下班：合上电脑；弹回来屏幕自己打开，那句话一遍遍跳出来
+const talk = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
   ctx.fillStyle = P.white;
-  ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  ctx.fillRect(x - w / 2 + 2, y - h / 2, w - 4, h);
+  ctx.fillRect(x - w / 2, y - h / 2 + 2, w, h - 4);
+  ctx.fillRect(x - w / 2 + 6, y + h / 2, 6, 3);
+  ctx.fillRect(x - w / 2 + 6, y + h / 2 + 3, 3, 2);
   ctx.fillStyle = P.slate;
-  for (let i = 0; i < w / 2; i++) {
-    const d = Math.round((i * h) / w);
-    ctx.fillRect(x - w / 2 + i, y - h / 2 + d, 1, 1);
-    ctx.fillRect(x + w / 2 - 1 - i, y - h / 2 + d, 1, 1);
-  }
+  ctx.fillRect(x - w / 2 + 5, y - h / 2 + 5, w - 10, 2);
+  if (h > 16) ctx.fillRect(x - w / 2 + 5, y - h / 2 + 10, Math.round((w - 10) * 0.6), 2);
 };
 const drawWork: Draw = (ctx, f) => {
   const back = f >= BACK;
@@ -133,10 +139,10 @@ const drawWork: Draw = (ctx, f) => {
   if (open > 0.4) {
     ctx.fillStyle = back ? P.cyan : P.navy;
     ctx.fillRect(184, 164 - h, 104, h - 8);
-    envelope(ctx, 236, 160 - h / 2, back ? 48 : 32, back ? 32 : 22);
+    talk(ctx, 236, 158 - h / 2, back ? 56 : 36, back ? 28 : 16);
     if (back) {
       ctx.fillStyle = P.red;
-      ctx.fillRect(254, 160 - h / 2 - 22, 12, 12);
+      ctx.fillRect(258, 158 - h / 2 - 22, 12, 12);
     }
   }
   ctx.fillStyle = P.grey;
@@ -145,13 +151,13 @@ const drawWork: Draw = (ctx, f) => {
   ctx.fillRect(170, 166, 132, 2);
   if (back) {
     [
-      [176, 70],
-      [300, 62],
-      [236, 44],
+      [172, 70],
+      [304, 60],
+      [236, 42],
     ].forEach(([x, y], i) => {
       if (f < BACK + 3 + i * 3) return;
       const t = clamp01((f - BACK - 3 - i * 3) / 8);
-      envelope(ctx, x, y + Math.round((1 - easeOut(t)) * 30), 28, 18);
+      talk(ctx, x, y + Math.round((1 - easeOut(t)) * 30), 40, 20);
     });
   }
 };
@@ -299,7 +305,7 @@ export const Flash: React.FC<{ i: number }> = ({ i }) => {
 
 // ---- 命名和词条卡：六只小虫并成一只，报出编号和名字（第 1 小节）；然后整体上移，打出定义并停住（第 2–3 小节）----
 const CARD = 90; // 从这一帧起进入词条卡
-const LIFT = 46; // 进入词条卡时标题上移多少（小画布像素）
+const LIFT = 40; // 进入词条卡时标题上移多少（小画布像素）
 const lift = (f: number) => Math.round(LIFT * ease(p(f, CARD, CARD + 14)));
 const drawTitle: Draw = (ctx, f) => {
   ctx.fillStyle = P.ink;

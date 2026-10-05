@@ -95,4 +95,6 @@ write(
   ),
 );
 write('save', mixAt([0, tone(sine, 880, 880, 0.5, 0.25, 5)], [0.12, tone(sine, 1320, 1320, 0.7, 0.25, 5)]));
+// 第二期新增：铃
+write('bell', mixAt([0, tone(sine, 1568, 1568, 0.5, 0.2, 6)], [0, tone(sine, 3136, 3136, 0.3, 0.08, 8)], [0, tone(tri, 2093, 2093, 0.4, 0.06, 7)]));
 console.log('已写入 public/sfx');
