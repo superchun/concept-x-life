@@ -1,6 +1,5 @@
 import type { CaptionLine } from '../lib/Text';
 import { BAR } from '../lib/theme';
-import { INVITE_ASLEEP, INVITE_AWAKE, N, SUPPRESS_ASLEEP, SUPPRESS_AWAKE } from './sim';
 
 export const TOTAL_BARS = 37;
 
@@ -44,7 +43,7 @@ const line = (bar: number, text: string, opt: Partial<CaptionLine> & { len?: num
   big: opt.big,
 });
 
-// 屏幕文字。没有文字的小节是留给画面和音乐的。数字直接来自仿真结果。
+// 屏幕文字。没有文字的小节是留给画面和音乐的。仿真只驱动画面，屏幕上不引用它的数字。
 // 第 8–9 小节的定义写在词条卡里，最后一问写在结尾画面里，都不在这张表上。
 export const LINES: CaptionLine[] = [
   line(0, '你早就决定，[不再想]了。'),
@@ -60,14 +59,14 @@ export const LINES: CaptionLine[] = [
   line(18, '想把它赶走，这很合理。只是守得越紧，它[来得越勤]。'),
   line(19, '人一累，找事的先睡着。[守门的还醒着]。'),
   line(20, '实验里也一样：禁令解除后，他们想得比别人[更多]。'),
-  line(21, `一百个小人，[${SUPPRESS_AWAKE} 个]睁着眼到了天亮。`),
+  line(21, '不只是你。每一扇亮着的窗里，都有人在[守门]。'),
   line(22, '早在 1939 年，一位医生就开过相反的处方。'),
   line(23, '别赶它。[请它进来]。', { tone: 'fix' }),
   line(24, '它叫[矛盾意向]。', { tone: 'fix' }),
   line(26, '没人守门，也就没人一直[举着它]。', { tone: 'fix' }),
   line(27, '它也许还在。只是它在，你也能[睡]了。', { tone: 'fix' }),
-  line(28, `同样一百个人：${SUPPRESS_ASLEEP}，变成 [${INVITE_ASLEEP} 个]睡着了。`, { tone: 'fix' }),
-  line(29, `还有 ${INVITE_AWAKE} 个没睡着。这不是保证。`),
+  line(28, '灯，一扇一扇地[灭了]。', { tone: 'fix' }),
+  line(29, '也有几扇，亮到了天亮。'),
   line(30, '睡不着，就先[醒着]。', { len: 2 / 3, tone: 'fix' }),
   line(30 + 2 / 3, '手要抖，就[让它抖]。', { len: 2 / 3, tone: 'fix' }),
   line(31 + 1 / 3, '想 TA，就[想一会儿]。', { len: 2 / 3, tone: 'fix' }),
@@ -76,4 +75,3 @@ export const LINES: CaptionLine[] = [
 ];
 
 export const QUESTION = '你的白熊，是什么？';
-export const POPULATION = N;
