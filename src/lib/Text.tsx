@@ -93,39 +93,62 @@ export const Txt: React.FC<{
   </div>
 );
 
-export type DialogLine = { at: number; dur: number; text: string; tone?: Tone };
+export type CaptionLine = { at: number; dur: number; text: string; tone?: Tone; big?: boolean };
 
-// 底部的游戏对话框：旁白一句一句打出来，打完后右下角的箭头闪烁
-export const Dialog: React.FC<{ lines: DialogLine[] }> = ({ lines }) => {
+const OUTLINE = [-1, 0, 1]
+  .flatMap((x) => [-1, 0, 1].map((y) => `${x * 4}px ${y * 4}px 0 ${P.ink}`))
+  .join(',');
+
+// 屏幕文字：普通句叠在画面下方；big 是金句，压暗画面后居中放大，用 \n 分行
+export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
   const frame = useCurrentFrame();
   const l = lines.find((x) => frame >= x.at && frame < x.at + x.dur);
   if (!l) return null;
-  const done = frame - l.at - 2 >= textLength(l.text);
+  const fade = p(frame, l.at, l.at + 4) * (1 - p(frame, l.at + l.dur - 6, l.at + l.dur));
+  if (l.big) {
+    let start = l.at + 10;
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(26,28,44,0.8)',
+          opacity: fade,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          fontFamily: FONT,
+          fontSize: 120,
+          lineHeight: '192px',
+          color: P.white,
+        }}
+      >
+        {l.text.split('\n').map((row) => {
+          const node = <Typed key={row} text={row} start={start} tone={l.tone} perChar={2.2} />;
+          start += textLength(row) * 2.2 + 16;
+          return <div key={row} style={{ minHeight: 192 }}>{node}</div>;
+        })}
+      </div>
+    );
+  }
   return (
     <div
       style={{
         position: 'absolute',
-        left: 64,
-        top: 928,
-        width: 1792,
-        height: 128,
-        boxSizing: 'border-box',
-        border: `8px solid ${P.white}`,
-        outline: `8px solid ${P.ink}`,
-        background: P.ink,
-        padding: '0 44px',
+        left: 0,
+        right: 0,
+        top: 936,
+        textAlign: 'center',
         fontFamily: FONT,
         fontSize: 60,
-        lineHeight: '112px',
-        whiteSpace: 'nowrap',
+        lineHeight: '72px',
         color: P.white,
-        opacity: p(frame, l.at, l.at + 2),
+        textShadow: OUTLINE,
+        opacity: fade,
       }}
     >
       <Typed key={l.at} text={l.text} start={l.at + 2} tone={l.tone} />
-      {done && frame % 24 < 14 && (
-        <span style={{ position: 'absolute', right: 30, bottom: -24, fontSize: 36, color: P.yellow }}>▼</span>
-      )}
     </div>
   );
 };

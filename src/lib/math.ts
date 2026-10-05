@@ -19,3 +19,11 @@ export const rng = (seed: number) => {
 
 export const gauss = (r: () => number) =>
   Math.sqrt(-2 * Math.log(r() + 1e-9)) * Math.cos(2 * Math.PI * r());
+
+const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+// 两个 #rrggbb 颜色按 t 混合
+export const mixHex = (a: string, b: string, t: number) => {
+  const x = hex(a);
+  const y = hex(b);
+  return `rgb(${x.map((v, i) => Math.round(lerp(v, y[i], clamp01(t)))).join(',')})`;
+};

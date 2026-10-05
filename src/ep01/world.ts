@@ -1,4 +1,4 @@
-import { rng } from '../lib/math';
+import { lerp, mixHex, rng } from '../lib/math';
 import { LH, LW, P } from '../lib/theme';
 import { PEAKS, f } from './sim';
 
@@ -16,45 +16,121 @@ export const cx = (c: number) => X0 + c * CW + 2;
 export const footY = (c: number, g: Lane) => g.base - colH(Math.min(NCOL - 1, Math.max(0, c)), g);
 export const peakCol = (k: number) => colOf(PEAKS[k][0]);
 
+// 镜头：世界坐标 (x, y) 落在画面中心 (240, 116)，z 是放大倍数
+export type Cam = { x: number; y: number; z: number };
+export const FULL: Cam = { x: 240, y: 116, z: 1 };
+export const lerpCam = (a: Cam, b: Cam, t: number): Cam => ({
+  x: lerp(a.x, b.x, t),
+  y: lerp(a.y, b.y, t),
+  z: lerp(a.z, b.z, t),
+});
+export const applyCam = (ctx: CanvasRenderingContext2D, c: Cam) => {
+  ctx.translate(240, 116);
+  ctx.scale(c.z, c.z);
+  ctx.translate(-Math.round(c.x), -Math.round(c.y));
+};
+export const toScreen = (c: Cam, wx: number, wy: number): [number, number] => [
+  (wx - Math.round(c.x)) * c.z + 240,
+  (wy - Math.round(c.y)) * c.z + 116,
+];
+
 const STARS = (() => {
   const r = rng(5);
-  return Array.from({ length: 80 }, () => ({ x: Math.floor(r() * LW), y: Math.floor(r() * 190), ph: r() * 6.28 }));
+  return Array.from({ length: 90 }, () => ({ x: Math.floor(r() * LW), y: Math.floor(r() * 170), ph: r() * 6.28 }));
+})();
+const MOTES = (() => {
+  const r = rng(11);
+  return Array.from({ length: 34 }, () => ({ x: r() * LW, y: r() * 220, v: 0.1 + r() * 0.25, ph: r() * 6.28 }));
 })();
 
-export const drawSky = (ctx: CanvasRenderingContext2D, fr: number, hills = true, shift = 0) => {
-  ctx.fillStyle = P.ink;
-  ctx.fillRect(0, 0, LW, LH);
-  for (const s of STARS) {
-    const tw = Math.sin(fr * 0.06 + s.ph);
-    if (tw < -0.4) continue;
-    ctx.fillStyle = tw > 0.6 ? P.grey : P.slate;
-    ctx.fillRect(s.x, s.y, 1, 1);
+// 天空从上到下五条色带。warm=0 是深蓝的夜，warm=1 是烧红的黄昏。
+const COLD = ['#11121d', '#1a1c2c', '#1e2240', '#232a52', '#29366f'];
+const WARM = ['#241733', '#5d275d', '#b13e53', '#ef7d57', '#ffcd75'];
+const BANDS = [64, 48, 40, 36, 34];
+
+// hills=false 时只画色带和星星，不画月亮和远山（给卡片类画面当底）
+export const drawSky = (ctx: CanvasRenderingContext2D, fr: number, warm = 0, shift = 0, hills = true) => {
+  let y = 0;
+  BANDS.forEach((h, i) => {
+    ctx.fillStyle = mixHex(COLD[i], WARM[i], warm);
+    ctx.fillRect(0, y, LW, i === 4 ? LH : h);
+    // 色带交界处用错位的点过渡
+    if (i > 0) {
+      for (let x = 0; x < LW; x += 2) {
+        ctx.fillRect(x, y - 2, 1, 1);
+        ctx.fillRect(x + 1, y - 1, 1, 1);
+        if (x % 4 === 0) ctx.fillRect(x, y - 4, 1, 1);
+      }
+    }
+    y += h;
+  });
+  if (warm < 0.6) {
+    ctx.globalAlpha = 1 - warm / 0.6;
+    for (const s of STARS) {
+      const tw = Math.sin(fr * 0.06 + s.ph);
+      if (tw < -0.4) continue;
+      ctx.fillStyle = tw > 0.6 ? P.white : P.grey;
+      ctx.fillRect(s.x, s.y, 1, 1);
+    }
+    ctx.globalAlpha = 1;
   }
   if (!hills) return;
-  // 远山剪影，镜头移动时跟得慢一些
-  ctx.fillStyle = '#20233a';
-  for (let x = 0; x < LW; x++) {
-    const u = x + shift;
-    const h = Math.round(34 + 14 * Math.sin(u * 0.021) + 8 * Math.sin(u * 0.057 + 1));
-    ctx.fillRect(x, 222 - h, 1, h);
+  // 冷的时候是高处的月亮，热的时候是贴着地平线的太阳
+  const cy = Math.round(lerp(54, 190, warm));
+  const cxx = 396 - Math.round(shift * 0.04);
+  ctx.fillStyle = mixHex(P.white, P.yellow, warm);
+  for (let dy = -13; dy <= 13; dy++) {
+    const w = Math.round(Math.sqrt(169 - dy * dy));
+    ctx.fillRect(cxx - w, cy + dy, w * 2, 1);
+  }
+  // 两层远山剪影，镜头移动时跟得慢
+  [
+    { c: mixHex('#191b30', '#4a1f4a', warm), amp: 16, base: 46, k: 0.12, f: 0.017 },
+    { c: mixHex('#20233a', '#6b2a52', warm), amp: 12, base: 28, k: 0.3, f: 0.027 },
+  ].forEach((L) => {
+    ctx.fillStyle = L.c;
+    for (let x = 0; x < LW; x++) {
+      const u = x + shift * L.k;
+      const h = Math.round(L.base + L.amp * Math.sin(u * L.f) + L.amp * 0.5 * Math.sin(u * L.f * 2.7 + 1));
+      ctx.fillRect(x, 222 - h, 1, h);
+    }
+  });
+};
+
+// 飘在空中的光点，画在镜头之外
+export const drawMotes = (ctx: CanvasRenderingContext2D, fr: number, warm = 0) => {
+  for (const m of MOTES) {
+    const y = (((m.y - fr * m.v) % 220) + 220) % 220;
+    const x = m.x + Math.sin(fr * 0.03 + m.ph) * 6;
+    if (Math.sin(fr * 0.08 + m.ph) < -0.2) continue;
+    ctx.fillStyle = warm > 0.3 ? P.yellow : P.cyan;
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
 };
 
-export const drawTerrain = (ctx: CanvasRenderingContext2D, g: Lane) => {
-  ctx.fillStyle = P.dark;
+export const drawTerrain = (ctx: CanvasRenderingContext2D, g: Lane, warm = 0) => {
+  const body = mixHex(P.dark, '#3d2545', warm * 0.8);
+  const top = mixHex(P.lime, P.yellow, warm);
+  const under = mixHex(P.green, P.orange, warm);
+  ctx.fillStyle = body;
   ctx.fillRect(-LW, g.base, LW * 3, LH);
-  ctx.fillStyle = P.green;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(-LW, g.base, LW * 3, LH);
+  ctx.fillStyle = under;
   ctx.fillRect(-LW, g.base, LW * 3, 1);
   for (let c = 0; c < NCOL; c++) {
     const h = colH(c, g);
     const x = X0 + c * CW;
-    ctx.fillStyle = P.dark;
+    ctx.fillStyle = body;
     ctx.fillRect(x, g.base - h, CW, h);
-    ctx.fillStyle = P.lime;
+    // 越往下越暗
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    if (h > 14) ctx.fillRect(x, g.base - h + 14, CW, h - 14);
+    if (h > 44) ctx.fillRect(x, g.base - h + 44, CW, h - 44);
+    ctx.fillStyle = top;
     ctx.fillRect(x, g.base - h, CW, 1);
-    ctx.fillStyle = P.green;
+    ctx.fillStyle = under;
     ctx.fillRect(x, g.base - h + 1, CW, 1);
-    // 土里零星的石子
     const k = (c * 7919) % 11;
     if (k < 3 && h > 8) {
       ctx.fillStyle = P.slate;

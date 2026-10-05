@@ -1,78 +1,60 @@
-import type { DialogLine } from '../lib/Text';
+import type { CaptionLine } from '../lib/Text';
 import { BAR } from '../lib/theme';
 import { ANNEAL_MAIN, CLIMB_MAIN, N } from './sim';
 
-export const TOTAL_BARS = 40;
+export const TOTAL_BARS = 30;
 
-// 各段起始小节。关卡段（复现、根因、补丁前半）是同一张连续地图。
-export const AT = {
-  symptoms: 0,
-  title: 4,
-  level: 6,
-  race: 28,
-  ending: 34,
-} as const;
+// 各段起始小节（一小节 3 秒）。关卡段是同一张连续地图。
+export const AT = { hook: 0, symptoms: 2, title: 4, level: 5, action: 28, end: 29 } as const;
 
 // 顶部进度条：[名称, 起始小节]
 export const STAGES: [string, number][] = [
   ['症状', 0],
-  ['复现', 6],
-  ['根因', 14],
-  ['补丁', 20],
-  ['结论', 34],
+  ['根因', 5],
+  ['代价', 12],
+  ['补丁', 16],
+  ['结论', 24],
 ];
 
-// 开头六条症状，每条一屏 2 秒：左边小动画，右边两行大字
-export const SYMPTOM_FRAMES = 60;
-export const SYMPTOMS: [string, string][] = [
-  ['外卖', '永远点那三家'],
-  ['歌单', '三年没换过'],
-  ['理发', '只会说「跟上次一样」'],
-  ['回家', '永远走同一条路'],
-  ['想辞职两年了', '简历还没改'],
-  ['和 TA 不算开心', '但也挑不出错'],
+// 症状六屏：前四屏快切，后两屏放慢。scene 是 symptoms.tsx 里小动画的编号。
+export const SYMPTOMS: { scene: number; dur: number; text: [string, string] }[] = [
+  { scene: 0, dur: 22, text: ['外卖', '只点那三家'] },
+  { scene: 1, dur: 23, text: ['歌单', '三年没换'] },
+  { scene: 3, dur: 22, text: ['回家', '只走一条路'] },
+  { scene: 2, dur: 23, text: ['发型', '十年没变'] },
+  { scene: 4, dur: 45, text: ['想辞职两年了', '简历还没改'] },
+  { scene: 5, dur: 45, text: ['和 TA', '挑不出错，也不算开心'] },
 ];
 
-const line = (bar: number, text: string, tone?: DialogLine['tone'], len = 1): DialogLine => ({
+const line = (bar: number, text: string, opt: Partial<CaptionLine> & { len?: number } = {}): CaptionLine => ({
   at: bar * BAR,
-  dur: len * BAR - 4,
+  dur: (opt.len ?? 1) * BAR - 4,
   text,
-  tone,
+  tone: opt.tone,
+  big: opt.big,
 });
 
-// 旁白里的数字直接来自仿真结果，不手写
-export const LINES: DialogLine[] = [
-  line(4, '这不是六个毛病。是[同一个 bug]。'),
-  line(5, '《人生 bug 图鉴》第 001 号：[局部最优]。'),
-
-  line(6, '来复现一下。派一个小人，去找[最高的山]。', 'fix'),
-  line(7, '规则只有一条：只能往上走。'),
-  line(8, '每一步都是对的。然后，它[不动了]。'),
-  line(9, '把镜头拉远。最高的山，就在[隔壁]。', 'fix'),
-  line(10, `再派 ${N} 个，规则不变。`),
-  line(11, '每一个，都在认真往上爬。'),
-  line(12, `到了最高那座山的：[${CLIMB_MAIN} 个]。`, 'fix'),
-  line(13, `剩下 ${N - CLIMB_MAIN} 个，全[卡在]小山顶上。没人做错任何事。`),
-
-  line(14, '人，也一样。'),
-  line(15, '那三家外卖，是一座小山顶。'),
-  line(16, '还行的工作，是。挑不出错的关系，也是。'),
-  line(17, '离开它的每一步，都是[下坡]。所以你留了下来。'),
-
-  line(20, '1983 年，三位科学家只改了一条规则。'),
-  line(21, '偶尔，允许走一步[下坡]。这个办法叫[模拟退火]。', 'fix'),
-  line(22, '像打铁：先烧红，再慢慢放凉。温度越高，越敢走下坡。'),
-  line(23, '一开始，它到处乱撞，看起来毫无进步。', undefined, 2),
-  line(25, '然后，温度慢慢降下来——'),
-  line(26, '它停在了[最高的那座山]上。', 'fix', 2),
-
-  line(28, `一个成功不算数。同一张地图，各 ${N} 人，同时出发。`),
-  line(29, '上面是旧规则：很快，就没人动了。'),
-  line(30, '年轻，就是[温度]还很高的时候。', 'fix'),
-  line(31, '走错的那几步，不是浪费，是在看清[山的全貌]。', 'fix'),
-  line(32, `[${ANNEAL_MAIN}] 比 ${CLIMB_MAIN}。`, 'fix'),
-  line(33, `还有 ${N - ANNEAL_MAIN} 个没到：这个办法[不保证成功]。`),
-
-  line(36, '这个 bug 修不掉。但今天，可以做一件[「暂时变差」]的事。', 'fix', 2),
-  line(38, 'BUG-001 已收录。你还中过什么 bug？[评论区告诉我]。', 'fix', 2),
+// 屏幕文字。没有文字的小节是留给画面和音乐的。数字直接来自仿真结果。
+export const LINES: CaptionLine[] = [
+  line(0, '这十年，你每一步都选了[更好]的。', { tone: 'fix' }),
+  line(1, '所以，你被[困住]了。'),
+  line(4, '这些是[同一件事]。'),
+  line(6, '更好的外卖。更稳的工作。更不费力的关系。'),
+  line(8, '你站在山顶。只是这座山[不高]。'),
+  line(10, '困住你的不是懒，\n是你太会选[「更好」]。', { len: 2, big: true }),
+  line(12, '去那座山，要先[下山]。', { tone: 'fix' }),
+  line(13, '下山的每一步，都在[变差]。'),
+  line(14, '这很合理。'),
+  line(15, `一百个小人，[${N - CLIMB_MAIN} 个]停在小山上。`),
+  line(16, '1983 年，有人改了这条规则。'),
+  line(17, '偶尔，允许自己走一步[下坡]。', { tone: 'fix' }),
+  line(18, '它叫[模拟退火]。', { tone: 'fix' }),
+  line(19, '温度高时多试多错，降下来再往上走。', { len: 2 }),
+  line(22, `同样一百个人：${CLIMB_MAIN}，变成 [${ANNEAL_MAIN}]。`, { tone: 'fix' }),
+  line(23, `还有 ${N - ANNEAL_MAIN} 个没到。这不是保证，只是[机会]。`, { tone: 'fix' }),
+  line(24, '年轻，是[温度]还高的时候。', { tone: 'fix' }),
+  line(25, '走错的路不算浪费。你是在[看清地形]。', { tone: 'fix' }),
+  line(26, '只肯往上走的人，\n[到不了最高的地方]。', { len: 2, big: true, tone: 'fix' }),
+  line(28, '今天，把那份简历打开。只改[一行]。', { tone: 'fix' }),
+  line(29, '你的山顶，是什么？'),
 ];

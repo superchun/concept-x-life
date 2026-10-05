@@ -1,131 +1,254 @@
 import React, { useCallback } from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { PixelCanvas, type Draw } from '../lib/PixelCanvas';
-import { Txt, Typed } from '../lib/Text';
+import { Txt } from '../lib/Text';
 import { clamp01, ease, lerp, p } from '../lib/math';
 import { FONT, P, S } from '../lib/theme';
-import { ANNEAL, CLIMB, CLIMB_COUNTS, CLIMB_END, CLIMB_STEPS, HERO, MAIN, N, PEAKS, climbPath, peakOf } from './sim';
-import { CW, MAIN_LANE as G, X0, bubble, colOf, cx, desk, drawSky, drawTerrain, firework, flag, footY, guy, peakCol, pilePos, shop, sofa } from './world';
+import {
+  ANNEAL,
+  ANNEAL_RUNS,
+  CLIMB,
+  CLIMB_COUNTS,
+  CLIMB_END,
+  CLIMB_MAIN,
+  CLIMB_STEPS,
+  HERO,
+  MAIN,
+  N,
+  PEAKS,
+  SETTLE,
+  climbPath,
+  peakOf,
+} from './sim';
+import {
+  CW,
+  FULL,
+  MAIN_LANE as G,
+  NCOL,
+  X0,
+  applyCam,
+  bubble,
+  colOf,
+  cx,
+  desk,
+  drawMotes,
+  drawSky,
+  drawTerrain,
+  firework,
+  flag,
+  footY,
+  guy,
+  lerpCam,
+  peakCol,
+  pilePos,
+  shop,
+  sofa,
+  toScreen,
+  type Cam,
+} from './world';
 
-// 这一段是同一张连续地图，t 是从「复现」开始算的帧数（每小节 90 帧）：
-//   0  小人出场      90 往上爬       180 到顶、试探   270 镜头拉远
-// 360  100 人下场   540 清点人数    630 卡住的冒泡
-// 720  人也一样     810/900/945 山顶上的东西        990 走下坡又退回
-// 1080 金句        1260 规则卡      1350 翻面        1440 温度条
-// 1530 开始退火    1830 降温结束    1840 插旗
+// 同一张连续地图。u 是这一段开始后的帧数（每小节 90 帧）：
+//    0 小人在山脚      95 往上爬，路边立起三样东西   185 到顶、左右试探
+//  270 镜头拉远        450 金句一（字幕层盖住）      630 镜头推近，虚线指向高山
+//  730 下山三步又退回   900 一百个小人下场           990 规则牌移到中间
+// 1085 规则牌翻面      1170 天色变暖                1260 主角开始退火
+// 1440 一百人重跑      1535 重跑结束                1620 镜头扫过没到的人
+// 1710 回到主角        1800 脚印点亮整张地图         1890 金句二（字幕层盖住）
 const DEMO = climbPath(0.6, 120);
+const START = colOf(0.6);
 const TOP = peakCol(3);
-const T_RUN = 1530;
-const T_COOL = 1830;
+const MAINC = peakCol(MAIN);
+const RUN: [number, number] = [1260, 1440];
+const RERUN: [number, number] = [1440, 1535];
 
-// 爬山结束后每个人在自己那座山顶上排第几
-const SLOT = (() => {
+const CLIMB_SLOT = (() => {
   const seen = PEAKS.map(() => 0);
   return CLIMB_END.map((x) => seen[peakOf(x)]++);
 })();
+// 重跑时登顶的人按登顶先后排位
+const RERUN_SLOT = (() => {
+  const order = SETTLE.map((s, i) => [s, i]).filter(([s]) => s >= 0).sort((a, b) => a[0] - b[0]);
+  const slot = new Array<number>(N).fill(-1);
+  order.forEach(([, i], k) => (slot[i] = k));
+  return slot;
+})();
+// 主角退火时踩过的列，从左到右
+const PRINTS = [...new Set(Array.from(HERO.xs, (x) => colOf(x)))].sort((a, b) => a - b);
 
-const annealStep = (t: number) => Math.round(p(t, T_RUN, T_COOL) * ANNEAL.steps);
-const heatAt = (t: number) =>
-  clamp01(Math.log(HERO.ts[annealStep(t)] / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1));
+const heroStep = (u: number) => Math.round(p(u, RUN[0], RUN[1]) * ANNEAL.steps);
+const crowdStep = (u: number) => Math.round(p(u, RERUN[0], RERUN[1]) * ANNEAL.steps);
+const heatOf = (step: number) => clamp01(Math.log(HERO.ts[step] / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1));
+const arriveAt = (i: number) => RERUN[0] + (SETTLE[i] / ANNEAL.steps) * (RERUN[1] - RERUN[0]);
+const rerunCount = (u: number) => {
+  const s = crowdStep(u);
+  let n = 0;
+  for (let i = 0; i < N; i++) if (SETTLE[i] >= 0 && s >= SETTLE[i]) n++;
+  return n;
+};
 
-const heroCol = (t: number) => {
-  if (t < 180) return colOf(DEMO[Math.round(p(t, 95, 175) * 120)]);
-  if (t >= 185 && t < 215) return TOP + Math.round(2 * Math.sin(p(t, 185, 215) * Math.PI));
-  if (t >= 215 && t < 245) return TOP - Math.round(2 * Math.sin(p(t, 215, 245) * Math.PI));
-  if (t >= 1000 && t < 1060) return TOP + Math.round(3 * Math.sin(p(t, 1000, 1060) * Math.PI));
-  if (t >= T_RUN) return colOf(HERO.xs[annealStep(t)]);
+// 天色：温度高就是暖色黄昏，冷下来回到夜里，结尾是天快亮的颜色
+const warmth = (u: number) => {
+  if (u < 1170) return 0;
+  if (u < RUN[0]) return ease(p(u, 1170, 1250));
+  if (u < RUN[1]) return heatOf(heroStep(u));
+  if (u < RERUN[1]) return heatOf(crowdStep(u));
+  return 0.45 * ease(p(u, 1640, 1760));
+};
+
+const heroCol = (u: number) => {
+  if (u < 180) return colOf(DEMO[Math.round(p(u, 95, 175) * 120)]);
+  if (u >= 185 && u < 215) return TOP + Math.round(2 * Math.sin(p(u, 185, 215) * Math.PI));
+  if (u >= 215 && u < 245) return TOP - Math.round(2 * Math.sin(p(u, 215, 245) * Math.PI));
+  if (u >= 730 && u < 840) return TOP + Math.round(4 * (u < 800 ? ease(p(u, 730, 790)) : 1 - ease(p(u, 810, 840))));
+  if (u >= RUN[0]) return colOf(HERO.xs[heroStep(u)]);
   return TOP;
 };
 
-const draw: Draw = (ctx, t) => {
-  // 镜头：开头贴着小人，270 帧起拉远到全景
-  const zoom = lerp(3, 1, ease(p(t, 275, 335)));
-  const hx = t < 180 ? X0 + DEMO[Math.round(p(t, 95, 175) * 120)] * (CW * 112) : cx(TOP);
-  const camX = lerp(hx, 240, ease(p(t, 275, 335)));
-  const camY = lerp(footY(heroCol(t), G) - 14, 116, ease(p(t, 275, 335)));
-  drawSky(ctx, t, true, camX * 0.3);
+const KEYS: [number, number, Cam][] = [
+  [270, 420, FULL],
+  [630, 665, { x: 300, y: 152, z: 2 }],
+  [895, 925, FULL],
+  [1620, 1650, { x: 120, y: 182, z: 2 }],
+  [1650, 1705, { x: 205, y: 182, z: 2 }],
+  [1710, 1745, { x: 330, y: 150, z: 2 }],
+  [1800, 1840, FULL],
+];
+const camAt = (u: number): Cam => {
+  const hx = u < 180 ? X0 + DEMO[Math.round(p(u, 95, 175) * 120)] * CW * NCOL : cx(TOP);
+  let cur: Cam = { x: hx, y: footY(heroCol(Math.min(u, 270)), G) - 16, z: 3 };
+  for (const [a, b, target] of KEYS) {
+    if (u >= b) cur = target;
+    else if (u >= a) return lerpCam(cur, target, ease(p(u, a, b)));
+    else break;
+  }
+  return cur;
+};
+
+const draw: Draw = (ctx, u) => {
+  const cam = camAt(u);
+  const w = warmth(u);
+  drawSky(ctx, u, w, cam.x);
   ctx.save();
-  ctx.translate(240, 116);
-  ctx.scale(zoom, zoom);
-  ctx.translate(-Math.round(camX), -Math.round(camY));
-  drawTerrain(ctx, G);
-
-  // 山顶上的三样东西，就是开头的症状
-  if (t >= 810) shop(ctx, cx(peakCol(1)) + 9, footY(peakCol(1) + 2, G));
-  if (t >= 900) desk(ctx, cx(peakCol(2)) + 9, footY(peakCol(2) + 2, G));
-  if (t >= 945) sofa(ctx, cx(TOP) - 11, footY(TOP - 3, G));
-
-  // 100 个小人
-  if (t >= 360 && t < 760) {
-    ctx.globalAlpha = 1 - p(t, 720, 760);
-    const idx = Math.round(p(t, 400, 520) * CLIMB_STEPS);
+  // 重跑时每有人登顶，画面轻轻震一下
+  if (u >= RERUN[0] && u < RERUN[1] + 4) {
     for (let i = 0; i < N; i++) {
-      const fall = p(t, 360 + i * 0.4, 385 + i * 0.4);
+      if (SETTLE[i] >= 0 && u - arriveAt(i) >= 0 && u - arriveAt(i) < 3) {
+        ctx.translate(u % 2 ? 1 : -1, 0);
+        break;
+      }
+    }
+  }
+  applyCam(ctx, cam);
+  drawTerrain(ctx, G, w);
+
+  // 从小山顶指向高山的虚线
+  if (u >= 640 && u < 900) {
+    const n = Math.round(p(u, 640, 700) * (MAINC - TOP));
+    ctx.fillStyle = P.yellow;
+    for (let c = TOP + 2; c <= TOP + n; c += 2) ctx.fillRect(cx(c) - 1, footY(c, G) - 8, 2, 2);
+  }
+  // 上山路上立起的三样东西
+  if (u >= 112) shop(ctx, cx(START - 2), footY(START - 2, G));
+  if (u >= 138) desk(ctx, cx(START - 5), footY(START - 5, G));
+  if (u >= 162) sofa(ctx, cx(TOP) - 11, footY(TOP - 3, G));
+  // 主角走过的脚印，连起来是整张地图的轮廓
+  if (u >= 1800) {
+    const n = Math.round(p(u, 1800, 1876) * PRINTS.length);
+    ctx.fillStyle = P.yellow;
+    for (let k = 0; k < n; k++) ctx.fillRect(cx(PRINTS[k]) - 1, footY(PRINTS[k], G) - 3, 2, 2);
+  }
+
+  // 旧规则下的一百个小人
+  if (u >= 900 && u < 1010) {
+    ctx.globalAlpha = 1 - p(u, 990, 1010);
+    const idx = Math.round(p(u, 918, 972) * CLIMB_STEPS);
+    for (let i = 0; i < N; i++) {
+      const fall = p(u, 900 + i * 0.2, 916 + i * 0.2);
       if (fall <= 0) continue;
       const x = CLIMB[i][idx];
       const k = peakOf(CLIMB_END[i]);
-      const arrived = Math.abs(x - CLIMB_END[i]) < 1e-6 && t >= 400;
-      const [px, py] = arrived ? pilePos(k, SLOT[i], G) : [cx(colOf(x)), footY(colOf(x), G)];
-      const color = t >= 540 && k === MAIN ? P.lime : t >= 630 && k !== MAIN ? P.slate : [P.grey, P.sky, P.cyan][i % 3];
-      guy(ctx, px, lerp(-12, py, fall * fall), 4, color, arrived ? 0 : Math.floor(t / 4) + i);
+      const arrived = u >= 918 && Math.abs(x - CLIMB_END[i]) < 1e-6;
+      const [px, py] = arrived ? pilePos(k, CLIMB_SLOT[i], G) : [cx(colOf(x)), footY(colOf(x), G)];
+      const color = !arrived ? [P.grey, P.sky, P.cyan][i % 3] : k === MAIN ? P.lime : P.slate;
+      guy(ctx, px, lerp(-12, py, fall * fall), 4, color, arrived ? 0 : Math.floor(u / 3) + i);
     }
-    if (t >= 630) {
+    if (u >= 975) {
       PEAKS.forEach((_, k) => {
-        if (k !== MAIN) bubble(ctx, cx(peakCol(k)), footY(peakCol(k), G) - Math.ceil(CLIMB_COUNTS[k] / 7) * 5 - 3, t);
+        if (k !== MAIN) bubble(ctx, cx(peakCol(k)), footY(peakCol(k), G) - Math.ceil(CLIMB_COUNTS[k] / 7) * 5 - 3, u);
       });
     }
-    if (t >= 540) flag(ctx, cx(peakCol(MAIN)) + 14, footY(peakCol(MAIN) + 3, G), P.lime, t);
+    ctx.globalAlpha = 1;
+  }
+  // 新规则下重跑
+  if (u >= RERUN[0] && u < 1740) {
+    ctx.globalAlpha = 1 - p(u, 1712, 1740);
+    const s = crowdStep(u);
+    const heat = heatOf(s);
+    const over = u >= RERUN[1];
+    for (let i = 0; i < N; i++) {
+      const done = SETTLE[i] >= 0 && s >= SETTLE[i];
+      const x = ANNEAL_RUNS[i][s];
+      const [px, py] = done ? pilePos(MAIN, RERUN_SLOT[i], G, 17) : [cx(colOf(x)), footY(colOf(x), G)];
+      const lost = over && !done;
+      const color = done ? [P.lime, P.yellow, P.cyan][RERUN_SLOT[i] % 3] : lost ? P.orange : heat > 0.5 ? P.white : P.grey;
+      const hop = done && (u + RERUN_SLOT[i] * 5) % 18 < 4 ? 2 : 0;
+      guy(ctx, px, py - hop, 4, color, done || lost ? 0 : Math.floor(u / 2) + i);
+      if (lost && u >= RERUN[1] + 20) bubble(ctx, px, py - 7, u);
+      if (SETTLE[i] >= 0) {
+        const top = footY(MAINC, G);
+        firework(ctx, cx(MAINC) + ((i * 37) % 170) - 85, top - 34 - ((i * 13) % 50), u - arriveAt(i) - 8, i, 1.6, top - 10);
+      }
+    }
     ctx.globalAlpha = 1;
   }
 
   // 主角
-  const col = heroCol(t);
-  const heat = heatAt(t);
-  const running = t >= T_RUN;
-  const color = !running ? P.yellow : heat > 0.5 ? P.orange : heat > 0.12 ? P.yellow : P.lime;
+  const col = heroCol(u);
+  const running = u >= RUN[0] && u < RUN[1];
+  const heat = heatOf(heroStep(u));
+  const color = u < RUN[0] ? P.yellow : running && heat > 0.5 ? P.orange : P.yellow;
   if (running) {
-    // 最近几步的残影
-    const s = annealStep(t);
-    for (let k = Math.max(0, s - 8); k < s; k++) {
-      ctx.globalAlpha = 0.08 * (k - (s - 8));
+    const s = heroStep(u);
+    for (let k = Math.max(0, s - 10); k < s; k++) {
+      ctx.globalAlpha = 0.07 * (k - (s - 10));
       guy(ctx, cx(colOf(HERO.xs[k])), footY(colOf(HERO.xs[k]), G), 8, color);
     }
     ctx.globalAlpha = 1;
   }
-  const moving = (t >= 95 && t < 175) || (running && t < T_COOL);
-  guy(ctx, cx(col), footY(col, G), t < 275 ? 6 : 8, color, moving ? Math.floor(t / 3) : 0);
-  if (t >= 245 && t < 720) bubble(ctx, cx(col), footY(col, G) - 12, t - 245);
-  if (t >= 1840) {
-    flag(ctx, cx(col) + 6, footY(col, G), P.yellow, t);
-    for (let i = 0; i < 4; i++) firework(ctx, cx(col) + [-18, 14, -6, 22][i], footY(col, G) - 26 - i * 5, t - 1846 - i * 9, i * 2);
+  const moving = (u >= 95 && u < 175) || (u >= 730 && u < 840) || running;
+  guy(ctx, cx(col), footY(col, G), 8, color, moving ? Math.floor(u / 3) : 0);
+  if ((u >= 245 && u < 450) || (u >= 845 && u < 900)) bubble(ctx, cx(col), footY(col, G) - 12, u - 245);
+  if (u >= RUN[1]) {
+    flag(ctx, cx(col) + 5, footY(col, G), P.yellow, u);
+    for (let i = 0; i < 3; i++) firework(ctx, cx(col) + [-20, 16, -4][i], footY(col, G) - 30 - i * 8, u - RUN[1] - 2 - i * 7, i * 2, 1.4, footY(col, G) - 8);
   }
   ctx.restore();
+  drawMotes(ctx, u, w);
 };
 
-const Card: React.FC<{ t: number }> = ({ t }) => {
-  // 规则卡：先在左上角，补丁段移到中间翻面，再回到左上角
-  const visible = (t >= 96 && t < 720) || t >= 1260;
-  if (!visible) return null;
-  const flip = p(t, 1350, 1376);
+// 规则牌：平时在左上角，补丁段移到中间翻面，再回左上角
+const Sign: React.FC<{ u: number }> = ({ u }) => {
+  if (u < 20 || (u >= 440 && u < 990) || u >= 1620) return null;
+  const flip = p(u, 1085, 1110);
   const patched = flip > 0.5;
-  const center = t >= 1260 ? 1 - ease(p(t, 1440, 1464)) : 0;
-  const size = center > 0.5 ? 72 : 36;
+  const center = u >= 990 ? 1 - ease(p(u, 1170, 1196)) : 0;
+  const big = center > 0.5;
   return (
     <div
       style={{
         position: 'absolute',
-        left: lerp(64, 960, center),
-        top: lerp(96, 400, center),
+        left: lerp(16 * S, 960, center),
+        top: lerp(24 * S, 380, center),
         transform: `translate(${-50 * center}%, ${-50 * center}%) scaleX(${Math.abs(Math.cos(flip * Math.PI))})`,
-        border: `8px solid ${patched ? P.lime : P.white}`,
+        border: `${2 * S}px solid ${patched ? P.lime : P.white}`,
         background: P.ink,
-        padding: center > 0.5 ? '36px 60px' : '14px 28px',
+        padding: big ? '36px 60px' : '12px 28px',
         fontFamily: FONT,
-        fontSize: size,
+        fontSize: big ? 72 : 36,
         lineHeight: 1.2,
         color: P.white,
         whiteSpace: 'nowrap',
-        opacity: t < 720 ? p(t, 96, 100) * (1 - p(t, 712, 720)) : p(t, 1260, 1266),
+        opacity: u < 440 ? p(u, 20, 26) * (1 - p(u, 432, 440)) : p(u, 990, 996) * (1 - p(u, 1612, 1620)),
       }}
     >
       <span style={{ color: patched ? P.lime : P.yellow }}>{patched ? '新规则　' : '规则　'}</span>
@@ -135,83 +258,102 @@ const Card: React.FC<{ t: number }> = ({ t }) => {
 };
 
 export const Level: React.FC = () => {
-  const t = useCurrentFrame();
+  const u = useCurrentFrame();
   const drawCb = useCallback(draw, []);
-  const heat = heatAt(t);
-  const col = heroCol(t);
-  const quote = t >= 1080 && t < 1260;
+  const cam = camAt(u);
+  const col = heroCol(u);
+  const [hx, hy] = toScreen(cam, cx(col), footY(col, G));
+  const n = rerunCount(u);
+  const pop = n > rerunCount(u - 3) ? 1.2 : 1;
+  const [mx, my] = toScreen(cam, cx(MAINC), footY(MAINC, G));
   return (
     <AbsoluteFill>
-      <PixelCanvas draw={drawCb} />
-      {t >= 540 &&
-        t < 760 &&
-        PEAKS.map((_, k) => (
-          <Txt
-            key={k}
-            x={cx(peakCol(k))}
-            y={footY(peakCol(k), G) - Math.ceil(CLIMB_COUNTS[k] / 7) * 5 - (k === MAIN ? 34 : t >= 630 ? 28 : 20)}
-            size={k === MAIN ? 96 : 48}
-            align="center"
-            color={k === MAIN ? P.lime : P.grey}
-            opacity={1 - p(t, 720, 760)}
-          >
-            {CLIMB_COUNTS[k]}
-          </Txt>
-        ))}
-      {t >= 810 && t < 990 && <Txt x={cx(peakCol(1)) + 9} y={footY(peakCol(1), G) - 28} size={36} align="center" color={P.yellow}>那三家外卖</Txt>}
-      {t >= 900 && t < 990 && <Txt x={cx(peakCol(2)) + 9} y={footY(peakCol(2), G) - 28} size={36} align="center" color={P.yellow}>还行的工作</Txt>}
-      {t >= 945 && t < 990 && <Txt x={cx(TOP) - 8} y={footY(TOP, G) - 30} size={36} align="center" color={P.yellow}>挑不出错的关系</Txt>}
-      {['收入 −1', '面子 −1', '确定性 −1'].map((s, i) => {
-        const a = 1004 + i * 14;
-        if (t < a || t >= a + 34) return null;
+      <PixelCanvas draw={drawCb} bloom />
+      {['收入 −1', '确定 −1', '体面 −1'].map((s, i) => {
+        const a = 738 + i * 16;
+        if (u < a || u >= a + 36) return null;
         return (
-          <Txt key={s} x={cx(col) + 10} y={footY(col, G) - 16 - (t - a) * 0.7} size={36} color={P.red} opacity={1 - p(t, a + 22, a + 34)}>
+          <Txt key={s} x={hx + 14} y={hy - 30 - (u - a) * 0.8} size={48} color={P.orange} opacity={1 - p(u, a + 24, a + 36)}>
             {s}
           </Txt>
         );
       })}
-      {quote && (
-        <AbsoluteFill
-          style={{
-            background: 'rgba(26,28,44,0.94)',
-            opacity: p(t, 1080, 1088) * (1 - p(t, 1250, 1260)),
-            fontFamily: FONT,
-            fontSize: 96,
-            lineHeight: '156px',
-            color: P.white,
-            paddingLeft: 180,
-            paddingTop: 300,
-          }}
-        >
-          <div>
-            <Typed text="待在舒适区，不是因为你懒。" start={1090} perChar={2.2} />
-          </div>
-          <div>
-            <Typed text="是因为你太会选[「更好」]了。" start={1160} perChar={2.2} />
-          </div>
-        </AbsoluteFill>
+      {u >= 975 && u < 1010 && (
+        <>
+          <Txt x={mx} y={my - 64} size={96} align="center" color={P.lime} opacity={1 - p(u, 990, 1010)}>
+            {CLIMB_MAIN}
+          </Txt>
+          <Txt x={150} y={64} size={144} align="center" color={P.grey} opacity={1 - p(u, 990, 1010)}>
+            {N - CLIMB_MAIN}
+          </Txt>
+        </>
       )}
-      <Card t={t} />
-      {t >= 1440 && (
-        <div style={{ position: 'absolute', right: 64, top: 96, fontFamily: FONT, color: P.white, textAlign: 'right', opacity: p(t, 1440, 1448) }}>
-          <span style={{ fontSize: 48 }}>温度　</span>
-          <span style={{ fontSize: 72, color: heat > 0.5 ? P.orange : heat > 0.12 ? P.yellow : P.lime }}>
-            {HERO.ts[annealStep(t)].toFixed(3)}
-          </span>
-          <div style={{ display: 'flex', gap: S, justifyContent: 'flex-end', marginTop: 12 }}>
-            {Array.from({ length: 20 }, (_, i) => (
-              <span
-                key={i}
-                style={{
-                  width: 5 * S,
-                  height: 6 * S,
-                  background: i < Math.round(heat * 20) ? (i > 12 ? P.red : i > 5 ? P.orange : P.yellow) : P.dark,
-                }}
-              />
-            ))}
-          </div>
-        </div>
+      {u >= RERUN[0] + 6 && u < 1620 && (
+        <Txt x={150} y={52} size={144} align="center" color={P.lime} scale={pop} opacity={1 - p(u, 1608, 1620)}>
+          {n}
+        </Txt>
       )}
+      <Sign u={u} />
+    </AbsoluteFill>
+  );
+};
+
+// ---- 开头：近景，小人一路往上走，到顶后被困住 ----
+const hookCam = (t: number): Cam => ({
+  x: X0 + DEMO[Math.round(p(t, 6, 84) * 120)] * CW * NCOL,
+  y: footY(colOf(DEMO[Math.round(p(t, 6, 84) * 120)]), G) - 16,
+  z: 3,
+});
+const hookCol = (t: number) => {
+  if (t >= 100 && t < 124) return TOP + Math.round(2 * Math.sin(p(t, 100, 124) * Math.PI));
+  if (t >= 124 && t < 148) return TOP - Math.round(2 * Math.sin(p(t, 124, 148) * Math.PI));
+  return colOf(DEMO[Math.round(p(t, 6, 84) * 120)]);
+};
+const drawHook: Draw = (ctx, t) => {
+  const cam = hookCam(t);
+  drawSky(ctx, t, 0, cam.x);
+  ctx.save();
+  applyCam(ctx, cam);
+  drawTerrain(ctx, G, 0);
+  // 走过的每一格都亮起来
+  const now = colOf(DEMO[Math.round(p(t, 6, 84) * 120)]);
+  ctx.fillStyle = P.yellow;
+  for (let c = now; c <= START; c++) ctx.fillRect(X0 + c * CW, footY(c, G), CW, 1);
+  const col = hookCol(t);
+  guy(ctx, cx(col), footY(col, G), 8, P.yellow, t >= 6 && t < 84 ? Math.floor(t / 3) : 0);
+  if (t >= 150) bubble(ctx, cx(col), footY(col, G) - 12, t - 150);
+  ctx.restore();
+  drawMotes(ctx, t, 0);
+};
+
+export const Hook: React.FC = () => {
+  const t = useCurrentFrame();
+  const drawCb = useCallback(drawHook, []);
+  const cam = hookCam(t);
+  return (
+    <AbsoluteFill>
+      <PixelCanvas draw={drawCb} bloom />
+      {[0, 1, 2, 3, 4].map((k) => {
+        const a = 12 + k * 15;
+        if (t < a || t >= a + 26) return null;
+        const c = colOf(DEMO[Math.round(p(a, 6, 84) * 120)]);
+        const [sx, sy] = toScreen(cam, cx(c), footY(c, G));
+        return (
+          <Txt key={k} x={sx + 14} y={sy - 44 - (t - a) * 0.9} size={48} color={P.lime} opacity={1 - p(t, a + 16, a + 26)}>
+            更好 +1
+          </Txt>
+        );
+      })}
+      {[-1, 1].map((d) => {
+        const on = d > 0 ? t >= 104 && t < 124 : t >= 128 && t < 148;
+        if (!on) return null;
+        const [sx, sy] = toScreen(cam, cx(TOP + d * 2), footY(TOP + d * 2, G));
+        return (
+          <Txt key={d} x={sx + d * 22} y={sy - 50} size={48} align="center" color={P.orange}>
+            更差
+          </Txt>
+        );
+      })}
     </AbsoluteFill>
   );
 };

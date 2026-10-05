@@ -4,7 +4,7 @@ import { PixelCanvas, type Draw } from '../lib/PixelCanvas';
 import { Txt } from '../lib/Text';
 import { clamp01, ease, easeOut, lerp, p } from '../lib/math';
 import { LH, LW, P, S } from '../lib/theme';
-import { SYMPTOMS, SYMPTOM_FRAMES } from './script';
+import { SYMPTOMS } from './script';
 import { monster } from './world';
 
 const box = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill: string, border: string) => {
@@ -154,8 +154,7 @@ const drawChat: Draw = (ctx, f) => {
 
 const DRAWS = [drawTakeout, drawPlaylist, drawHaircut, drawCommute, drawResume, drawChat];
 
-const Extras: React.FC<{ i: number }> = ({ i }) => {
-  const f = useCurrentFrame();
+const Extras: React.FC<{ i: number; f: number }> = ({ i, f }) => {
   if (i === 0) return <Txt x={292} y={44} size={48} color={P.yellow} scale={punch(f, 38)} opacity={f >= 38 ? 1 : 0}>第 147 次</Txt>;
   if (i === 1) return <Txt x={240} y={170} size={48} align="center" color={P.grey}>已循环 {1205 + Math.floor(f / 20)} 次</Txt>;
   if (i === 2) {
@@ -193,40 +192,6 @@ const Extras: React.FC<{ i: number }> = ({ i }) => {
   );
 };
 
-// 每屏右上角的连击数，和已经攒下的小怪
-const Combo: React.FC<{ i: number }> = ({ i }) => {
-  const f = useCurrentFrame();
-  const n = f >= 36 ? i + 1 : i;
-  const draw: Draw = useCallback(
-    (ctx, fr) => {
-      const k = fr >= 36 ? i + 1 : i;
-      for (let j = 0; j < k; j++) monster(ctx, 30 + j * 20, 252 - (j === i ? Math.round(6 * Math.sin(clamp01((fr - 36) / 10) * Math.PI)) : 0), 1);
-    },
-    [i],
-  );
-  return (
-    <>
-      <PixelCanvas draw={draw} />
-      {n > 0 && (
-        <Txt x={464} y={232} size={72} align="right" color={P.sky} scale={i + 1 === n ? Math.max(1, punch(f, 36)) : 1}>
-          老样子 ×{n}
-        </Txt>
-      )}
-    </>
-  );
-};
-
-// ---- 症状：一条一屏，每屏从右边推进来 ----
-export const Symptoms: React.FC = () => (
-  <AbsoluteFill>
-    {SYMPTOMS.map((_, i) => (
-      <Sequence key={i} from={i * SYMPTOM_FRAMES} durationInFrames={SYMPTOM_FRAMES}>
-        <Screen i={i} />
-      </Sequence>
-    ))}
-  </AbsoluteFill>
-);
-
 const SHIFT = 90;
 const drawPanel: Draw = (ctx) => {
   ctx.fillStyle = P.dark;
@@ -235,29 +200,61 @@ const drawPanel: Draw = (ctx) => {
   ctx.fillRect(22, 28, 248, 192);
 };
 
+// ---- 症状：一条一屏，从右边推进来。左下角每过一屏多一只小虫。 ----
+export const Symptoms: React.FC = () => {
+  let from = 0;
+  return (
+    <AbsoluteFill style={{ background: P.ink }}>
+      {SYMPTOMS.map((sym, i) => {
+        const node = (
+          <Sequence key={i} from={from} durationInFrames={sym.dur}>
+            <Screen i={i} />
+          </Sequence>
+        );
+        from += sym.dur;
+        return node;
+      })}
+    </AbsoluteFill>
+  );
+};
+
 const Screen: React.FC<{ i: number }> = ({ i }) => {
-  const f = useCurrentFrame();
-  const slide = Math.round(((1 - easeOut(p(f, 0, 6))) * LW) / 2) * S * 2;
-  const [head, tail] = SYMPTOMS[i];
+  const raw = useCurrentFrame();
+  const { scene, dur, text } = SYMPTOMS[i];
+  // 小动画按 60 帧设计，短屏就加速播放
+  const f = (raw * 60) / dur;
+  const slide = Math.round(((1 - easeOut(p(raw, 0, 5))) * LW) / 2) * S * 2;
+  const draw: Draw = useCallback((ctx, fr) => DRAWS[scene](ctx, (fr * 60) / dur), [scene, dur]);
+  const bugs: Draw = useCallback(
+    (ctx, fr) => {
+      const n = fr >= dur / 2 ? i + 1 : i;
+      for (let j = 0; j < n; j++) {
+        const hop = j === i ? Math.round(6 * Math.sin(clamp01((fr - dur / 2) / 8) * Math.PI)) : 0;
+        monster(ctx, 30 + j * 20, 252 - hop, 1);
+      }
+    },
+    [i, dur],
+  );
   return (
     <AbsoluteFill>
       <AbsoluteFill style={{ transform: `translateX(${slide}px)` }}>
         <PixelCanvas draw={drawPanel} />
         <AbsoluteFill style={{ transform: `translate(${-SHIFT * S}px, ${4 * S}px)` }}>
-          <PixelCanvas draw={DRAWS[i]} />
-          <Extras i={i} />
+          <PixelCanvas draw={draw} />
+          <Extras i={scene} f={f} />
         </AbsoluteFill>
-        <Txt x={284} y={84} size={96} color={P.yellow} scale={punch(f, 3)} opacity={f >= 3 ? 1 : 0}>{head}</Txt>
-        <Txt x={284} y={124} size={72} scale={punch(f, 12)} opacity={f >= 12 ? 1 : 0}>{tail}</Txt>
+        <Txt x={284} y={84} size={96} color={P.yellow} scale={punch(raw, 2)} opacity={raw >= 2 ? 1 : 0}>{text[0]}</Txt>
+        <Txt x={284} y={124} size={72} scale={punch(raw, 6)} opacity={raw >= 6 ? 1 : 0}>{text[1]}</Txt>
       </AbsoluteFill>
-      <Combo i={i} />
+      <PixelCanvas draw={bugs} />
     </AbsoluteFill>
   );
 };
 
-// ---- 标题：六只小怪并成一只，报出编号和名字 ----
+// ---- 标题：六只小虫并成一只，报出编号和名字 ----
 const drawTitle: Draw = (ctx, f) => {
-  // 脚下的小土包
+  ctx.fillStyle = P.ink;
+  ctx.fillRect(0, 0, LW, LH);
   ctx.fillStyle = P.dark;
   for (let x = -60; x <= 60; x++) {
     const h = Math.round(26 * Math.exp(-(x * x) / 1400));
@@ -266,30 +263,29 @@ const drawTitle: Draw = (ctx, f) => {
     ctx.fillRect(130 + x, 190 - h, 1, 1);
     ctx.fillStyle = P.dark;
   }
-  if (f < 32) {
+  if (f < 24) {
     for (let j = 0; j < 6; j++) {
-      const t = ease(p(f, 2 + j * 3, 22 + j * 3));
+      const t = ease(p(f, 1 + j * 2, 16 + j * 2));
       monster(ctx, lerp(30 + j * 20, 130, t), lerp(252, 150, t) - Math.sin(t * Math.PI) * 40, 1);
     }
     return;
   }
-  if (f < 36) {
+  if (f < 27) {
     ctx.fillStyle = P.white;
     ctx.fillRect(0, 0, LW, LH);
     return;
   }
-  const land = clamp01((f - 36) / 10);
-  monster(ctx, 130, 166 - Math.round(Math.sin(land * Math.PI) * 8), 5, f > 46 ? 0.04 * Math.sin(f * 0.2) : 0);
+  const land = clamp01((f - 27) / 9);
+  monster(ctx, 130, 166 - Math.round(Math.sin(land * Math.PI) * 8), 5, f > 36 ? 0.04 * Math.sin(f * 0.2) : 0);
 };
 
 export const Title: React.FC = () => {
   const f = useCurrentFrame();
   return (
     <AbsoluteFill>
-      <PixelCanvas draw={drawTitle} />
-      {f >= 44 && <Txt x={236} y={64} size={72} color={P.sky} scale={punch(f, 44)}>BUG-001</Txt>}
-      {f >= 96 && <Txt x={234} y={90} size={192} scale={punch(f, 96)}>局部最优</Txt>}
-      {f >= 120 && <Txt x={236} y={150} size={48} color={P.grey}>每一步都在变好，却到不了最好。</Txt>}
+      <PixelCanvas draw={drawTitle} bloom />
+      {f >= 30 && <Txt x={236} y={70} size={72} color={P.sky} scale={punch(f, 30)}>BUG-001</Txt>}
+      {f >= 40 && <Txt x={234} y={96} size={192} scale={punch(f, 40)}>局部最优</Txt>}
     </AbsoluteFill>
   );
 };
