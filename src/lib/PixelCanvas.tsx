@@ -1,11 +1,11 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { useCurrentFrame } from 'remotion';
-import { H, W } from './theme';
+import { H, LH, LW, W } from './theme';
 
 export type Draw = (ctx: CanvasRenderingContext2D, frame: number) => void;
 
-// 每帧清空后整幅重画。draw 只能依赖帧号，不能依赖上一帧留下的像素。
-export const Canvas: React.FC<{ draw: Draw; opacity?: number }> = ({ draw, opacity = 1 }) => {
+// 低分辨率画布，每帧清空后整幅重画。draw 只能依赖帧号。
+export const PixelCanvas: React.FC<{ draw: Draw }> = ({ draw }) => {
   const frame = useCurrentFrame();
   const ref = useRef<HTMLCanvasElement>(null);
   useLayoutEffect(() => {
@@ -13,11 +13,18 @@ export const Canvas: React.FC<{ draw: Draw; opacity?: number }> = ({ draw, opaci
     if (!ctx) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, LW, LH);
     ctx.save();
     draw(ctx, frame);
     ctx.restore();
   }, [frame, draw]);
-  return <canvas ref={ref} width={W} height={H} style={{ position: 'absolute', inset: 0, opacity }} />;
+  return (
+    <canvas
+      ref={ref}
+      width={LW}
+      height={LH}
+      style={{ position: 'absolute', left: 0, top: 0, width: W, height: H, imageRendering: 'pixelated' }}
+    />
+  );
 };

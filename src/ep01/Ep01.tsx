@@ -1,113 +1,68 @@
 import React from 'react';
 import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame } from 'remotion';
-import { Console } from '../lib/Text';
-import { p } from '../lib/math';
-import { BAR, BG, DIM, FONT, GREEN, LINE, RED, TEXT, rgba } from '../lib/theme';
-import { CAPTIONS, SCENES, STAGES } from './script';
-import { SceneA, SceneB, SceneC, SceneD, SceneE, SceneF, SceneG } from './scenes';
+import { PixelWipe } from '../lib/PixelWipe';
+import { Dialog } from '../lib/Text';
+import { clamp01 } from '../lib/math';
+import { BAR, FONT, P, S } from '../lib/theme';
+import { Ending } from './ending';
+import { Level } from './level';
+import { Race } from './race';
+import { AT, LINES, STAGES, TOTAL_BARS } from './script';
+import { Symptoms, Title } from './symptoms';
 
 // 把 BGM 放到 public/ 下并在这里填文件名（例如 'ep01.mp3'），留 null 则输出无声版
 const BGM: string | null = null;
 
-// C→D 是同一张地形接着讲，不做淡入淡出；其余段落之间短暂淡出再淡入
-const Fade: React.FC<{ len: number; fadeIn?: boolean; fadeOut?: boolean; children: React.ReactNode }> = ({
-  len,
-  fadeIn = true,
-  fadeOut = true,
-  children,
-}) => {
-  const frame = useCurrentFrame();
-  const a = (fadeIn ? p(frame, 0, 8) : 1) * (fadeOut ? 1 - p(frame, len - 8, len) : 1);
-  return <AbsoluteFill style={{ opacity: a }}>{children}</AbsoluteFill>;
-};
-
-const scene = (
-  key: keyof typeof SCENES,
-  node: React.ReactNode,
-  fade: { fadeIn?: boolean; fadeOut?: boolean } = {},
-) => {
-  const { bar, len } = SCENES[key];
+// 顶部进度条：五个阶段按时长分段，随时间连续填充
+const Progress: React.FC = () => {
+  const bar = useCurrentFrame() / BAR;
   return (
-    <Sequence key={key} from={bar * BAR} durationInFrames={len * BAR}>
-      <Fade len={len * BAR} {...fade}>
-        {node}
-      </Fade>
-    </Sequence>
-  );
-};
-
-// 顶栏：系列名、条目编号、当前讲到哪个阶段
-const TopBar: React.FC = () => {
-  const frame = useCurrentFrame();
-  const bar = frame / BAR;
-  let cur = 0;
-  STAGES.forEach(([, from], i) => {
-    if (bar >= from) cur = i;
-  });
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: 0,
-        height: 76,
-        borderBottom: `2px solid ${LINE}`,
-        background: '#0e0e11',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 48px',
-        fontFamily: FONT.sans,
-        fontWeight: 600,
-        fontSize: 32,
-        color: rgba(TEXT),
-      }}
-    >
-      <span style={{ width: 16, height: 16, borderRadius: 8, background: rgba(RED), marginRight: 16 }} />
-      人生 bug 图鉴
-      <span
-        style={{
-          fontFamily: FONT.mono,
-          fontSize: 26,
-          color: rgba(DIM),
-          marginLeft: 28,
-          opacity: p(frame, SCENES.B.bar * BAR, SCENES.B.bar * BAR + 12),
-        }}
-      >
-        BUG-001 · 局部最优
-      </span>
-      <span style={{ flex: 1 }} />
-      {STAGES.map(([name], i) => (
-        <span
-          key={name}
-          style={{
-            marginLeft: 12,
-            padding: '6px 20px',
-            borderRadius: 8,
-            fontSize: 28,
-            color: i === cur ? '#131316' : rgba(i < cur ? TEXT : DIM, i < cur ? 0.8 : 0.6),
-            background: i === cur ? rgba(i === STAGES.length - 1 || i === 3 ? GREEN : RED) : 'transparent',
-            border: `2px solid ${i === cur ? 'transparent' : LINE}`,
-          }}
-        >
-          {name}
-        </span>
-      ))}
+    <div style={{ position: 'absolute', left: 16 * S, top: 6 * S, width: 448 * S, height: 12 * S, display: 'flex', gap: 2 * S }}>
+      {STAGES.map(([name, from], i) => {
+        const to = STAGES[i + 1]?.[1] ?? TOTAL_BARS;
+        const fill = clamp01((bar - from) / (to - from));
+        return (
+          <div key={name} style={{ flex: to - from, position: 'relative', background: P.dark, overflow: 'hidden' }}>
+            {/* 填充按 4 像素一格前进，保持像素感 */}
+            <div style={{ width: `${Math.floor(fill * 50) * 2}%`, height: '100%', background: fill >= 1 ? P.teal : P.green }} />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                fontFamily: FONT,
+                fontSize: 36,
+                lineHeight: `${12 * S}px`,
+                textAlign: 'center',
+                color: fill > 0 ? P.white : P.slate,
+              }}
+            >
+              {name}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
 
+const seq = (from: number, to: number, node: React.ReactNode) => (
+  <Sequence from={from * BAR} durationInFrames={(to - from) * BAR}>
+    {node}
+  </Sequence>
+);
+
+const CUTS = [AT.level * BAR, AT.race * BAR, AT.ending * BAR];
+
 export const Ep01: React.FC = () => (
-  <AbsoluteFill style={{ background: BG }}>
-    {scene('A', <SceneA />, { fadeIn: false })}
-    {scene('B', <SceneB />)}
-    {scene('C', <SceneC />, { fadeOut: false })}
-    {scene('D', <SceneD />, { fadeIn: false })}
-    {scene('E', <SceneE />)}
-    {scene('F', <SceneF />)}
-    {scene('G', <SceneG />, { fadeOut: false })}
-    <TopBar />
-    <Console lines={CAPTIONS} />
+  <AbsoluteFill style={{ background: P.ink }}>
+    {seq(AT.symptoms, AT.title, <Symptoms />)}
+    {seq(AT.title, AT.level, <Title />)}
+    {seq(AT.level, AT.race, <Level />)}
+    {seq(AT.race, AT.ending, <Race />)}
+    {seq(AT.ending, TOTAL_BARS, <Ending />)}
+    <PixelWipe cuts={CUTS} />
+    <Progress />
+    <Dialog lines={LINES} />
     {BGM && <Audio src={staticFile(BGM)} />}
   </AbsoluteFill>
 );

@@ -1,11 +1,11 @@
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
 import { p } from './math';
-import { BAR, FONT, GREEN, RED, TEXT, rgba } from './theme';
+import { FONT, P, S } from './theme';
 
-// bug = 红色波浪线（像编辑器里的报错），fix = 绿色
+// bug = 橙色，fix = 绿色
 export type Tone = 'bug' | 'fix';
-const toneRgb = (tone: Tone) => (tone === 'fix' ? GREEN : RED);
+const toneColor = (tone: Tone) => (tone === 'fix' ? P.lime : P.orange);
 
 type Seg = { chars: string[]; hi: boolean; idx: number };
 
@@ -39,93 +39,91 @@ export const Rich: React.FC<{ text: string; tone?: Tone; shown?: number }> = ({
   text,
   tone = 'bug',
   shown = Infinity,
-}) => {
-  const c = toneRgb(tone);
-  return (
-    <>
-      {parse(text).map((seg) => {
-        const str = seg.chars.slice(0, Math.max(0, Math.floor(shown) - seg.idx)).join('');
-        if (!str) return null;
-        if (!seg.hi) return <span key={seg.idx}>{str}</span>;
-        return (
-          <span
-            key={seg.idx}
-            style={{
-              color: rgba(c),
-              textDecoration: `underline wavy ${rgba(c)}`,
-              textDecorationThickness: '0.06em',
-              textUnderlineOffset: '0.22em',
-            }}
-          >
-            {str}
-          </span>
-        );
-      })}
-    </>
-  );
-};
+}) => (
+  <>
+    {parse(text).map((seg) => {
+      const str = seg.chars.slice(0, Math.max(0, Math.floor(shown) - seg.idx)).join('');
+      if (!str) return null;
+      return (
+        <span key={seg.idx} style={{ color: seg.hi ? toneColor(tone) : undefined }}>
+          {str}
+        </span>
+      );
+    })}
+  </>
+);
 
-// 逐字打出的一行，末尾带光标
-export const Typed: React.FC<{ text: string; start: number; tone?: Tone; perChar?: number; cursor?: boolean }> = ({
+export const Typed: React.FC<{ text: string; start: number; tone?: Tone; perChar?: number }> = ({
   text,
   start,
   tone,
-  perChar = 1.1,
-  cursor = true,
+  perChar = 1,
 }) => {
   const frame = useCurrentFrame();
-  const shown = (frame - start) / perChar;
-  const done = shown >= textLength(text);
-  return (
-    <>
-      <Rich text={text} tone={tone} shown={shown} />
-      {cursor && frame >= start && (
-        <span
-          style={{
-            display: 'inline-block',
-            width: '0.5em',
-            height: '1em',
-            marginLeft: '0.12em',
-            verticalAlign: '-0.12em',
-            background: rgba(TEXT, done && frame % 30 >= 16 ? 0 : 0.85),
-          }}
-        />
-      )}
-    </>
-  );
+  return <Rich text={text} tone={tone} shown={(frame - start) / perChar} />;
 };
 
-export type CaptionLine = { bar: number; len?: number; text: string; tone?: Tone };
+// 按小画布坐标摆一行字。size 是实际像素，用 12 的倍数。
+export const Txt: React.FC<{
+  x: number;
+  y: number;
+  size?: number;
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+  opacity?: number;
+  scale?: number;
+  children: React.ReactNode;
+}> = ({ x, y, size = 48, color = P.white, align = 'left', opacity = 1, scale = 1, children }) => (
+  <div
+    style={{
+      position: 'absolute',
+      left: x * S,
+      top: y * S,
+      fontFamily: FONT,
+      fontSize: size,
+      lineHeight: 1,
+      color,
+      whiteSpace: 'nowrap',
+      opacity,
+      transform: `translateX(${align === 'center' ? '-50%' : align === 'right' ? '-100%' : '0'}) scale(${scale})`,
+      transformOrigin: align === 'left' ? 'left center' : align === 'right' ? 'right center' : 'center',
+    }}
+  >
+    {children}
+  </div>
+);
 
-// 底部的命令行：旁白一句一句打出来
-export const Console: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
+export type DialogLine = { at: number; dur: number; text: string; tone?: Tone };
+
+// 底部的游戏对话框：旁白一句一句打出来，打完后右下角的箭头闪烁
+export const Dialog: React.FC<{ lines: DialogLine[] }> = ({ lines }) => {
   const frame = useCurrentFrame();
-  const l = lines.find((x) => frame >= x.bar * BAR + 3 && frame < (x.bar + (x.len ?? 1)) * BAR - 4);
+  const l = lines.find((x) => frame >= x.at && frame < x.at + x.dur);
+  if (!l) return null;
+  const done = frame - l.at - 2 >= textLength(l.text);
   return (
     <div
       style={{
         position: 'absolute',
-        left: 0,
-        right: 0,
-        top: 918,
-        height: 162,
-        borderTop: '2px solid #32323c',
-        background: '#0e0e11',
-        display: 'flex',
-        alignItems: 'center',
-        paddingLeft: 120,
-        fontFamily: FONT.sans,
-        fontWeight: 600,
-        fontSize: 50,
-        letterSpacing: 2,
-        color: rgba(TEXT),
+        left: 64,
+        top: 872,
+        width: 1792,
+        height: 176,
+        boxSizing: 'border-box',
+        border: `8px solid ${P.white}`,
+        outline: `8px solid ${P.ink}`,
+        background: P.ink,
+        padding: '22px 44px',
+        fontFamily: FONT,
+        fontSize: 48,
+        lineHeight: '60px',
+        color: P.white,
+        opacity: p(frame, l.at, l.at + 2),
       }}
     >
-      <span style={{ fontFamily: FONT.mono, color: rgba(GREEN), marginRight: 28 }}>›</span>
-      {l && (
-        <span style={{ opacity: 1 - p(frame, (l.bar + (l.len ?? 1)) * BAR - 10, (l.bar + (l.len ?? 1)) * BAR - 4) }}>
-          <Typed key={l.bar} text={l.text} start={l.bar * BAR + 3} tone={l.tone} />
-        </span>
+      <Typed key={l.at} text={l.text} start={l.at + 2} tone={l.tone} />
+      {done && frame % 24 < 14 && (
+        <span style={{ position: 'absolute', right: 30, bottom: 12, fontSize: 36, color: P.yellow }}>▼</span>
       )}
     </div>
   );

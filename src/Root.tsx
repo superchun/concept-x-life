@@ -1,3 +1,4 @@
+import './lib/font';
 import React from 'react';
 import { Composition } from 'remotion';
 import { Ep01 } from './ep01/Ep01';
