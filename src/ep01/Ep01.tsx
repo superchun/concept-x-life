@@ -7,10 +7,13 @@ import { BAR, FONT, P, S } from '../lib/theme';
 import { Action, End } from './ending';
 import { Hook, Level } from './level';
 import { AT, LINES, STAGES, TOTAL_BARS } from './script';
+import { SFX } from './sfx';
 import { Symptoms, Title } from './symptoms';
 
 // 把 BGM 放到 public/ 下并在这里填文件名（例如 'ep01.mp3'），留 null 则输出无声版
 const BGM: string | null = null;
+// 音效是 scripts/sfx.ts 合成的，这里可以整体关掉
+const SFX_ON = true;
 
 // 顶部进度条：五个阶段按时长分段，随时间连续填充
 const Progress: React.FC = () => {
@@ -62,9 +65,16 @@ export const Ep01: React.FC = () => (
     {seq(AT.action, AT.end, <Action />)}
     {seq(AT.end, TOTAL_BARS, <End />)}
     <AbsoluteFill style={{ background: 'radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%)' }} />
+    <AbsoluteFill style={{ background: 'linear-gradient(to top, rgba(17,18,29,0.9) 0%, rgba(17,18,29,0.6) 12%, rgba(17,18,29,0) 24%)' }} />
     <Captions lines={LINES} />
     <PixelWipe cuts={CUTS} />
     <Progress />
+    {SFX_ON &&
+      SFX.map((s, i) => (
+        <Sequence key={i} from={s.at} durationInFrames={90}>
+          <Audio src={staticFile(`sfx/${s.name}.wav`)} volume={s.vol ?? 1} />
+        </Sequence>
+      ))}
     {BGM && <Audio src={staticFile(BGM)} />}
   </AbsoluteFill>
 );

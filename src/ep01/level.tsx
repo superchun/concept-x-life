@@ -37,6 +37,7 @@ import {
   firework,
   flag,
   footY,
+  hero,
   guy,
   lerpCam,
   peakCol,
@@ -78,7 +79,7 @@ const PRINTS = [...new Set(Array.from(HERO.xs, (x) => colOf(x)))].sort((a, b) =>
 const heroStep = (u: number) => Math.round(p(u, RUN[0], RUN[1]) * ANNEAL.steps);
 const crowdStep = (u: number) => Math.round(p(u, RERUN[0], RERUN[1]) * ANNEAL.steps);
 const heatOf = (step: number) => clamp01(Math.log(HERO.ts[step] / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1));
-const arriveAt = (i: number) => RERUN[0] + (SETTLE[i] / ANNEAL.steps) * (RERUN[1] - RERUN[0]);
+export const arriveAt = (i: number) => RERUN[0] + (SETTLE[i] / ANNEAL.steps) * (RERUN[1] - RERUN[0]);
 const rerunCount = (u: number) => {
   const s = crowdStep(u);
   let n = 0;
@@ -110,7 +111,7 @@ const KEYS: [number, number, Cam][] = [
   [895, 925, FULL],
   [1620, 1650, { x: 120, y: 182, z: 2 }],
   [1650, 1705, { x: 205, y: 182, z: 2 }],
-  [1710, 1745, { x: 330, y: 150, z: 2 }],
+  [1710, 1745, { x: 330, y: 138, z: 2 }],
   [1800, 1840, FULL],
 ];
 const camAt = (u: number): Cam => {
@@ -202,25 +203,28 @@ const draw: Draw = (ctx, u) => {
     ctx.globalAlpha = 1;
   }
 
-  // 主角
+  // 主角。全景时放大一倍，保证手机上看得见
   const col = heroCol(u);
+  const sc = cam.z < 1.5 ? 2 : 1;
   const running = u >= RUN[0] && u < RUN[1];
   const heat = heatOf(heroStep(u));
-  const color = u < RUN[0] ? P.yellow : running && heat > 0.5 ? P.orange : P.yellow;
+  const color = running && heat > 0.5 ? P.orange : P.yellow;
   if (running) {
     const s = heroStep(u);
     for (let k = Math.max(0, s - 10); k < s; k++) {
-      ctx.globalAlpha = 0.07 * (k - (s - 10));
-      guy(ctx, cx(colOf(HERO.xs[k])), footY(colOf(HERO.xs[k]), G), 8, color);
+      ctx.globalAlpha = 0.06 * (k - (s - 10));
+      hero(ctx, cx(colOf(HERO.xs[k])), footY(colOf(HERO.xs[k]), G), sc, color, 0, 9);
     }
     ctx.globalAlpha = 1;
   }
   const moving = (u >= 95 && u < 175) || (u >= 730 && u < 840) || running;
-  guy(ctx, cx(col), footY(col, G), 8, color, moving ? Math.floor(u / 3) : 0);
-  if ((u >= 245 && u < 450) || (u >= 845 && u < 900)) bubble(ctx, cx(col), footY(col, G) - 12, u - 245);
+  // 登顶后蹦几下
+  const hop = u >= RUN[1] && u < RUN[1] + 70 && (u - RUN[1]) % 14 < 6 ? 3 : 0;
+  hero(ctx, cx(col), footY(col, G) - hop, sc, color, moving ? Math.floor(u / 3) : 0, u);
+  if ((u >= 245 && u < 450) || (u >= 845 && u < 900)) bubble(ctx, cx(col), footY(col, G) - 12 * sc, u - 245);
   if (u >= RUN[1]) {
-    flag(ctx, cx(col) + 5, footY(col, G), P.yellow, u);
-    for (let i = 0; i < 3; i++) firework(ctx, cx(col) + [-20, 16, -4][i], footY(col, G) - 30 - i * 8, u - RUN[1] - 2 - i * 7, i * 2, 1.4, footY(col, G) - 8);
+    flag(ctx, cx(col) + 4 * sc, footY(col, G), P.yellow, u);
+    for (let i = 0; i < 3; i++) firework(ctx, cx(col) + [-20, 16, -4][i], footY(col, G) - 36 - i * 8, u - RUN[1] - 2 - i * 7, i * 2, 1.4, footY(col, G) - 8);
   }
   ctx.restore();
   drawMotes(ctx, u, w);
@@ -298,30 +302,55 @@ export const Level: React.FC = () => {
   );
 };
 
-// ---- 开头：近景，小人一路往上走，到顶后被困住 ----
-const hookCam = (t: number): Cam => ({
-  x: X0 + DEMO[Math.round(p(t, 6, 84) * 120)] * CW * NCOL,
-  y: footY(colOf(DEMO[Math.round(p(t, 6, 84) * 120)]), G) - 16,
-  z: 3,
-});
-const hookCol = (t: number) => {
-  if (t >= 100 && t < 124) return TOP + Math.round(2 * Math.sin(p(t, 100, 124) * Math.PI));
-  if (t >= 124 && t < 148) return TOP - Math.round(2 * Math.sin(p(t, 124, 148) * Math.PI));
-  return colOf(DEMO[Math.round(p(t, 6, 84) * 120)]);
+// ---- 开头：十级台阶，一年一级。走到头，前面是断崖 ----
+const STEP_W = 16;
+const STEP_H = 9;
+const stair = (i: number): [number, number] =>
+  i < 0 ? [64, 210] : i >= 10 ? [251, 210 - 10 * STEP_H] : [80 + i * STEP_W + 8, 210 - (i + 1) * STEP_H];
+const CLIMB_T: [number, number] = [6, 84];
+// 第 k 次落脚的帧（k=0 是第一级）
+export const landFrame = (k: number) => CLIMB_T[0] + ((k + 1) * (CLIMB_T[1] - CLIMB_T[0])) / 11;
+const hookPos = (t: number): [number, number, boolean] => {
+  if (t >= 100 && t < 124) return [251 + 8 * Math.sin(p(t, 100, 124) * Math.PI), 120, true];
+  if (t >= 124 && t < 148) return [251 - 8 * Math.sin(p(t, 124, 148) * Math.PI), 120, true];
+  const s = p(t, CLIMB_T[0], CLIMB_T[1]) * 11;
+  const k = Math.min(10, Math.floor(s));
+  const fr = Math.min(1, s - k);
+  const [x0, y0] = stair(k - 1);
+  const [x1, y1] = stair(k);
+  return [lerp(x0, x1, fr), lerp(y0, y1, fr) - Math.sin(fr * Math.PI) * 6, s < 11];
+};
+const hookCam = (t: number): Cam => {
+  const [x, y] = hookPos(t);
+  return { x: x + 10, y: y - 22, z: 2 };
 };
 const drawHook: Draw = (ctx, t) => {
   const cam = hookCam(t);
   drawSky(ctx, t, 0, cam.x);
   ctx.save();
   applyCam(ctx, cam);
-  drawTerrain(ctx, G, 0);
-  // 走过的每一格都亮起来
-  const now = colOf(DEMO[Math.round(p(t, 6, 84) * 120)]);
-  ctx.fillStyle = P.yellow;
-  for (let c = now; c <= START; c++) ctx.fillRect(X0 + c * CW, footY(c, G), CW, 1);
-  const col = hookCol(t);
-  guy(ctx, cx(col), footY(col, G), 8, P.yellow, t >= 6 && t < 84 ? Math.floor(t / 3) : 0);
-  if (t >= 150) bubble(ctx, cx(col), footY(col, G) - 12, t - 150);
+  const done = Math.floor(p(t, CLIMB_T[0], CLIMB_T[1]) * 11);
+  ctx.fillStyle = P.dark;
+  ctx.fillRect(-200, 210, 440, 80);
+  for (let i = 0; i <= 10; i++) {
+    const x = i < 10 ? 80 + i * STEP_W : 240;
+    const w = i < 10 ? STEP_W : 22;
+    const top = 210 - Math.min(10, i + 1) * STEP_H;
+    ctx.fillStyle = P.dark;
+    ctx.fillRect(x, top, w, 290 - top);
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.fillRect(x, top + 14, w, 290 - top);
+    // 踩过的台阶亮起来
+    ctx.fillStyle = i < done ? P.yellow : P.lime;
+    ctx.fillRect(x, top, w, 1);
+    ctx.fillStyle = i < done ? P.orange : P.green;
+    ctx.fillRect(x, top + 1, w, 1);
+  }
+  ctx.fillStyle = P.lime;
+  ctx.fillRect(-200, 210, 280, 1);
+  const [x, y, moving] = hookPos(t);
+  hero(ctx, x, y, 2, P.yellow, moving ? Math.floor(t / 3) : 0, t);
+  if (t >= 150) bubble(ctx, x, y - 24, t - 150);
   ctx.restore();
   drawMotes(ctx, t, 0);
 };
@@ -333,24 +362,23 @@ export const Hook: React.FC = () => {
   return (
     <AbsoluteFill>
       <PixelCanvas draw={drawCb} bloom />
-      {[0, 1, 2, 3, 4].map((k) => {
-        const a = 12 + k * 15;
-        if (t < a || t >= a + 26) return null;
-        const c = colOf(DEMO[Math.round(p(a, 6, 84) * 120)]);
-        const [sx, sy] = toScreen(cam, cx(c), footY(c, G));
+      {Array.from({ length: 10 }, (_, k) => {
+        const a = Math.round(landFrame(k));
+        if (t < a || t >= a + 24) return null;
+        const [sx, sy] = toScreen(cam, ...stair(k));
         return (
-          <Txt key={k} x={sx + 14} y={sy - 44 - (t - a) * 0.9} size={48} color={P.lime} opacity={1 - p(t, a + 16, a + 26)}>
-            更好 +1
+          <Txt key={k} x={sx} y={sy - 62 - (t - a) * 0.6} size={48} align="center" color={P.lime} opacity={1 - p(t, a + 14, a + 24)}>
+            第 {k + 1} 年
           </Txt>
         );
       })}
-      {[-1, 1].map((d) => {
+      {[1, -1].map((d) => {
         const on = d > 0 ? t >= 104 && t < 124 : t >= 128 && t < 148;
         if (!on) return null;
-        const [sx, sy] = toScreen(cam, cx(TOP + d * 2), footY(TOP + d * 2, G));
+        const [sx, sy] = toScreen(cam, 251 + d * 26, 120);
         return (
-          <Txt key={d} x={sx + d * 22} y={sy - 50} size={48} align="center" color={P.orange}>
-            更差
+          <Txt key={d} x={sx} y={sy - 4} size={48} align="center" color={P.orange}>
+            ↓ 更差
           </Txt>
         );
       })}

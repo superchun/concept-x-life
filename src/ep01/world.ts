@@ -148,6 +148,7 @@ export const guy = (
   size: number,
   color: string,
   step = 0,
+  blink = false,
 ) => {
   if (size <= 4) {
     const l = Math.round(x) - 1;
@@ -169,12 +170,31 @@ export const guy = (
   ctx.fillRect(l + 1, t + 6, 3, 2);
   ctx.fillStyle = P.white;
   ctx.fillRect(l + 1, t + 2, 3, 3);
-  ctx.fillStyle = P.ink;
-  ctx.fillRect(l + 1, t + 3, 1, 1);
-  ctx.fillRect(l + 3, t + 3, 1, 1);
+  if (!blink) {
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(l + 1, t + 3, 1, 1);
+    ctx.fillRect(l + 3, t + 3, 1, 1);
+  }
   ctx.fillStyle = P.grey;
   ctx.fillRect(l + 1, t + 8, 1, step % 2 ? 1 : 2);
   ctx.fillRect(l + 3, t + 8, 1, step % 2 ? 2 : 1);
+};
+
+// 主角：大号小人整体放大 scale 倍，每隔几秒眨一下眼
+export const hero = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  color: string,
+  step: number,
+  fr: number,
+) => {
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.scale(scale, scale);
+  guy(ctx, 0, 0, 8, color, step, fr % 70 < 4);
+  ctx.restore();
 };
 
 // 头顶的「…」气泡
