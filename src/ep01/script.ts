@@ -2,10 +2,10 @@ import type { CaptionLine } from '../lib/Text';
 import { BAR } from '../lib/theme';
 import { ANNEAL_MAIN, CLIMB_MAIN, N } from './sim';
 
-export const TOTAL_BARS = 32;
+export const TOTAL_BARS = 33;
 
 // 各段起始小节（一小节 3 秒）。关卡段是同一张连续地图。
-export const AT = { hook: 0, symptoms: 2, title: 6, level: 7, action: 30, end: 31 } as const;
+export const AT = { hook: 0, symptoms: 2, title: 6, level: 7, action: 30, end: 32 } as const;
 
 // 顶部进度条：[名称, 起始小节]
 export const STAGES: [string, number][] = [
@@ -55,6 +55,7 @@ export const LINES: CaptionLine[] = [
   line(26, '年轻，是[温度]还高的时候。', { tone: 'fix' }),
   line(27, '走错的路不算浪费。你是在[看清地形]。', { tone: 'fix' }),
   line(28, '只肯往上走的人，\n[到不了最高的地方]。', { len: 2, big: true, tone: 'fix' }),
-  line(30, '今天，把那份简历打开。只改[一行]。', { tone: 'fix' }),
-  line(31, '你的山顶，是什么？'),
+  line(30, '今天回家，换一条[没走过的路]。', { tone: 'fix' }),
+  line(31, '说不定，有更好的风景，和 [TA]。', { tone: 'fix' }),
+  line(32, '你的山顶，是什么？'),
 ];

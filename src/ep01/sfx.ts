@@ -1,4 +1,5 @@
 import { BAR } from '../lib/theme';
+import { SIGHTS } from './ending';
 import { arriveAt, landFrame } from './level';
 import { AT, SYMPTOMS } from './script';
 import { N, SETTLE } from './sim';
@@ -45,6 +46,8 @@ for (let i = 0; i < N; i += 3) {
   if (SETTLE[i] >= 0) cues.push({ at: L + Math.round(arriveAt(i)) + 8, name: 'pop', vol: 0.7 });
 }
 
-cues.push({ at: AT.action * BAR + 62, name: 'save' }, { at: AT.end * BAR + 22, name: 'tick' });
+// 结尾：三个街区依次亮起，遇见 TA 时响一声
+SIGHTS.forEach((at, i) => cues.push({ at: AT.action * BAR + at, name: `plus${4 + i * 2}` }));
+cues.push({ at: AT.action * BAR + 144, name: 'save' }, { at: AT.end * BAR + 22, name: 'tick' });
 
 export const SFX = cues;
