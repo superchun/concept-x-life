@@ -53,8 +53,8 @@ const seq = (from: number, to: number, node: React.ReactNode) => (
   </Sequence>
 );
 
-// 症状前后和结尾两屏用像素块转场；关卡内部只靠镜头移动，不切画面
-const CUTS = [AT.symptoms * BAR, AT.level * BAR, AT.action * BAR, AT.end * BAR];
+// 症状前后和回到台阶时用像素块转场；关卡内部和最后一问只靠镜头移动，不切画面
+const CUTS = [AT.symptoms * BAR, AT.level * BAR, AT.action * BAR];
 
 export const Ep01: React.FC = () => (
   <AbsoluteFill style={{ background: P.ink }}>

@@ -217,7 +217,7 @@ export const flag = (ctx: CanvasRenderingContext2D, x: number, y: number, color:
   ctx.fillRect(Math.round(x) + 1, Math.round(y) - 9, 6 - w, 2);
 };
 
-// 小山顶上的三样东西：外卖店、工位、沙发。x 是中心，y 是底边。
+// 小山顶上的三样东西：奶茶店、工位、沙发。x 是中心，y 是底边。
 export const shop = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
   ctx.fillStyle = P.white;
   ctx.fillRect(x - 6, y - 8, 12, 8);

@@ -273,7 +273,7 @@ export const Level: React.FC = () => {
   return (
     <AbsoluteFill>
       <PixelCanvas draw={drawCb} bloom />
-      {['收入 −1', '确定 −1', '体面 −1'].map((s, i) => {
+      {['分数 −1', '效率 −1', '体面 −1'].map((s, i) => {
         const a = 738 + i * 16;
         if (u < a || u >= a + 36) return null;
         return (
@@ -303,10 +303,31 @@ export const Level: React.FC = () => {
 };
 
 // ---- 开头：十级台阶，一年一级。走到头，前面是断崖 ----
-const STEP_W = 16;
-const STEP_H = 9;
+export const STEP_W = 16;
+export const STEP_H = 9;
 const stair = (i: number): [number, number] =>
   i < 0 ? [64, 210] : i >= 10 ? [251, 210 - 10 * STEP_H] : [80 + i * STEP_W + 8, 210 - (i + 1) * STEP_H];
+// 十级台阶和地面。done 是已经踩亮的级数。
+export const drawStairs = (ctx: CanvasRenderingContext2D, done: number) => {
+  ctx.fillStyle = P.dark;
+  ctx.fillRect(-200, 210, 440, 80);
+  for (let i = 0; i <= 10; i++) {
+    const x = i < 10 ? 80 + i * STEP_W : 240;
+    const w = i < 10 ? STEP_W : 22;
+    const top = 210 - Math.min(10, i + 1) * STEP_H;
+    ctx.fillStyle = P.dark;
+    ctx.fillRect(x, top, w, 290 - top);
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.fillRect(x, top + 14, w, 290 - top);
+    // 踩过的台阶亮起来
+    ctx.fillStyle = i < done ? P.yellow : P.lime;
+    ctx.fillRect(x, top, w, 1);
+    ctx.fillStyle = i < done ? P.orange : P.green;
+    ctx.fillRect(x, top + 1, w, 1);
+  }
+  ctx.fillStyle = P.lime;
+  ctx.fillRect(-200, 210, 280, 1);
+};
 const CLIMB_T: [number, number] = [6, 84];
 // 第 k 次落脚的帧（k=0 是第一级）
 export const landFrame = (k: number) => CLIMB_T[0] + ((k + 1) * (CLIMB_T[1] - CLIMB_T[0])) / 11;
@@ -329,25 +350,7 @@ const drawHook: Draw = (ctx, t) => {
   drawSky(ctx, t, 0, cam.x);
   ctx.save();
   applyCam(ctx, cam);
-  const done = Math.floor(p(t, CLIMB_T[0], CLIMB_T[1]) * 11);
-  ctx.fillStyle = P.dark;
-  ctx.fillRect(-200, 210, 440, 80);
-  for (let i = 0; i <= 10; i++) {
-    const x = i < 10 ? 80 + i * STEP_W : 240;
-    const w = i < 10 ? STEP_W : 22;
-    const top = 210 - Math.min(10, i + 1) * STEP_H;
-    ctx.fillStyle = P.dark;
-    ctx.fillRect(x, top, w, 290 - top);
-    ctx.fillStyle = 'rgba(0,0,0,0.16)';
-    ctx.fillRect(x, top + 14, w, 290 - top);
-    // 踩过的台阶亮起来
-    ctx.fillStyle = i < done ? P.yellow : P.lime;
-    ctx.fillRect(x, top, w, 1);
-    ctx.fillStyle = i < done ? P.orange : P.green;
-    ctx.fillRect(x, top + 1, w, 1);
-  }
-  ctx.fillStyle = P.lime;
-  ctx.fillRect(-200, 210, 280, 1);
+  drawStairs(ctx, Math.floor(p(t, CLIMB_T[0], CLIMB_T[1]) * 11));
   const [x, y, moving] = hookPos(t);
   hero(ctx, x, y, 2, P.yellow, moving ? Math.floor(t / 3) : 0, t);
   if (t >= 150) bubble(ctx, x, y - 24, t - 150);

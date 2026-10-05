@@ -1,179 +1,123 @@
 import React, { useCallback } from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { PixelCanvas, type Draw } from '../lib/PixelCanvas';
-import { Txt } from '../lib/Text';
-import { ease, easeOut, lerp, p } from '../lib/math';
-import { P } from '../lib/theme';
-import { bubble, drawMotes, drawSky, hero, monster } from './world';
+import { Txt, Typed } from '../lib/Text';
+import { ease, lerp, p } from '../lib/math';
+import { FONT, P } from '../lib/theme';
+import { STEP_H, STEP_W, drawStairs } from './level';
+import { Flash } from './symptoms';
+import { applyCam, bubble, drawMotes, drawSky, hero, lerpCam, toScreen } from './world';
 
 const DAWN = 0.45;
 
-// ---- 行动：症状里那张回家的地图。这次在第一个路口拐进没走过的街 ----
-const OLD: [number, number][] = [[168, 54], [258, 54], [258, 144], [318, 144], [318, 174]];
-const NEW: [number, number][] = [[168, 54], [168, 114], [228, 114], [228, 174], [318, 174]];
-const MEET = 198; // 走到 TA 身边停下，按路程算
-const along = (d: number): [number, number] => {
-  for (let i = 1; i < NEW.length; i++) {
-    const [ax, ay] = NEW[i - 1];
-    const [bx, by] = NEW[i];
-    const len = Math.abs(bx - ax) + Math.abs(by - ay);
-    if (d <= len) return [lerp(ax, bx, d / len), lerp(ay, by, d / len)];
-    d -= len;
+// ---- 行动：回到开头的十级台阶。这次他往下迈了一步，脚下才出现路 ----
+// 时间点（段内帧）：0 站在顶上  30 六个症状闪回  66 往右探  96 起每 18 帧下一级
+// 110–176 镜头拉远，露出右边更高的台阶  162 走过谷底  200 开始往上走
+export const FLASH: [number, number] = [30, 6]; // [起始帧, 每屏帧数]
+export const DOWN_T = [96, 114, 132, 150];
+const TOP: [number, number] = [251, 210 - 10 * STEP_H];
+const VALLEY = TOP[1] + 4 * STEP_H;
+const FAR_X = 390;
+const FAR_W = 10;
+const FAR_N = 20;
+const down = (k: number): [number, number] => (k <= 0 ? [TOP[0] + 3, TOP[1]] : [262 + (k - 1) * STEP_W + 8, TOP[1] + k * STEP_H]);
+const far = (m: number): [number, number] => (m < 0 ? [FAR_X - 5, VALLEY] : [FAR_X + m * FAR_W + 5, VALLEY - (m + 1) * STEP_H]);
+const hopTo = (a: [number, number], b: [number, number], t: number): [number, number, boolean] => [
+  lerp(a[0], b[0], t),
+  lerp(a[1], b[1], t) - Math.sin(t * Math.PI) * 5,
+  t < 1,
+];
+const pos = (f: number): [number, number, boolean] => {
+  if (f < DOWN_T[0]) return [TOP[0] + 3 * ease(p(f, 66, 80)), TOP[1], false];
+  if (f < 162) {
+    const k = DOWN_T.filter((t0) => f >= t0).length;
+    return hopTo(down(k - 1), down(k), p(f, DOWN_T[k - 1], DOWN_T[k - 1] + 12));
   }
-  return NEW[NEW.length - 1];
+  if (f < 200) return [lerp(down(4)[0], far(-1)[0], p(f, 162, 200)), VALLEY, true];
+  const m = Math.min(FAR_N - 1, Math.floor((f - 200) / 12));
+  return hopTo(far(m - 1), far(m), p(f, 200 + m * 12, 200 + m * 12 + 9));
 };
-const road = (ctx: CanvasRenderingContext2D, pts: [number, number][], w: number, upTo = Infinity) => {
-  for (let i = 1; i < pts.length && upTo > 0; i++) {
-    const [ax, ay] = pts[i - 1];
-    const len = Math.abs(pts[i][0] - ax) + Math.abs(pts[i][1] - ay);
-    const t = Math.min(1, upTo / len);
-    const bx = lerp(ax, pts[i][0], t);
-    const by = lerp(ay, pts[i][1], t);
-    ctx.fillRect(Math.min(ax, bx) - w / 2, Math.min(ay, by) - w / 2, Math.abs(bx - ax) + w, Math.abs(by - ay) + w);
-    upTo -= len;
-  }
-};
-// 路过时亮起来的三个街区：[出现帧, 画法]
-const tree = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
-  ctx.fillStyle = P.plum;
-  ctx.fillRect(x + 2, y + 6, 2, 4);
-  ctx.fillStyle = P.green;
-  ctx.fillRect(x, y + 1, 6, 5);
-  ctx.fillStyle = P.lime;
-  ctx.fillRect(x + 1, y, 4, 3);
-};
-export const SIGHTS = [58, 84, 110];
-const drawSights = (ctx: CanvasRenderingContext2D, f: number) => {
-  const grow = (i: number) => easeOut(p(f, SIGHTS[i], SIGHTS[i] + 10));
-  // 小树林
-  if (f >= SIGHTS[0]) {
-    ctx.fillStyle = P.teal;
-    ctx.fillRect(142, 88, 24, Math.round(24 * grow(0)));
-    if (grow(0) >= 1) [[144, 90], [154, 89], [148, 100], [158, 101]].forEach(([x, y]) => tree(ctx, x, y));
-  }
-  // 湖，水面上有落日的倒影
-  if (f >= SIGHTS[1]) {
-    const w = Math.round(52 * grow(1));
-    ctx.fillStyle = P.blue;
-    ctx.fillRect(172, 118, w, 24);
-    if (grow(1) >= 1) {
-      ctx.fillStyle = P.sky;
-      ctx.fillRect(176, 122, 44, 2);
-      ctx.fillStyle = P.orange;
-      ctx.fillRect(190, 128 + (Math.floor(f / 8) % 2), 16, 2);
-      ctx.fillStyle = P.yellow;
-      ctx.fillRect(194, 132, 8, 2);
-    }
-  }
-  // 花圃
-  if (f >= SIGHTS[2]) {
-    ctx.fillStyle = P.green;
-    ctx.fillRect(202, 148, 24, Math.round(24 * grow(2)));
-    if (grow(2) >= 1) {
-      [P.red, P.yellow, P.white, P.orange, P.yellow, P.red].forEach((c, i) => {
-        ctx.fillStyle = c;
-        ctx.fillRect(205 + (i % 3) * 7, 152 + Math.floor(i / 3) * 10 + ((i + Math.floor(f / 10)) % 2), 3, 3);
-      });
-    }
-  }
+const CAM0 = { x: TOP[0] + 10, y: TOP[1] - 22, z: 2 };
+const CAM1 = { x: 350, y: 84, z: 0.9 };
+const outroCam = (f: number) => lerpCam(CAM0, CAM1, ease(p(f, 110, 176)));
+
+const column = (ctx: CanvasRenderingContext2D, x: number, top: number, w: number, lit: boolean) => {
+  ctx.fillStyle = P.dark;
+  ctx.fillRect(x, top, w, 300 - top);
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.fillRect(x, top + 14, w, 300 - top);
+  ctx.fillStyle = lit ? P.yellow : P.lime;
+  ctx.fillRect(x, top, w, 1);
+  ctx.fillStyle = lit ? P.orange : P.green;
+  ctx.fillRect(x, top + 1, w, 1);
 };
 
-const drawAction: Draw = (ctx, f) => {
-  drawSky(ctx, f, DAWN, 0, false);
+const drawOutro: Draw = (ctx, f) => {
+  const cam = outroCam(f);
+  drawSky(ctx, f, DAWN, cam.x);
+  ctx.save();
+  applyCam(ctx, cam);
+  drawStairs(ctx, 11);
+  // 往下的台阶：迈出去的那一刻才出现
+  DOWN_T.forEach((t0, i) => {
+    if (f >= t0) column(ctx, 262 + i * STEP_W, TOP[1] + (i + 1) * STEP_H, STEP_W, f >= t0 + 12);
+  });
+  if (f >= DOWN_T[3]) column(ctx, 262 + 4 * STEP_W, VALLEY, FAR_X - 262 - 4 * STEP_W, false);
+  // 右边那段更高的台阶，开头的镜头里看不到
+  const climbed = f < 200 ? 0 : Math.floor((f - 200) / 12) + 1;
+  for (let m = 0; m < FAR_N; m++) column(ctx, FAR_X + m * FAR_W, VALLEY - (m + 1) * STEP_H, FAR_W, m < climbed);
+  column(ctx, FAR_X + FAR_N * FAR_W, VALLEY - FAR_N * STEP_H, 200, false);
+  const [x, y, moving] = pos(f);
+  hero(ctx, x, y, 2, P.yellow, moving ? Math.floor(f / 3) : 0, f);
+  if (f < FLASH[0]) bubble(ctx, x, y - 24, f);
+  ctx.restore();
   drawMotes(ctx, f, DAWN);
-  ctx.fillStyle = P.grey;
-  ctx.fillRect(124, 24, 240, 176);
-  ctx.fillStyle = P.ink;
-  ctx.fillRect(126, 26, 236, 172);
-  ctx.fillStyle = P.dark;
-  for (let x = 138; x <= 348; x += 30) ctx.fillRect(x, 34, 2, 156);
-  for (let y = 54; y <= 174; y += 30) ctx.fillRect(132, y - 1, 220, 2);
-  drawSights(ctx, f);
-  // 走了无数遍的老路
-  ctx.fillStyle = P.teal;
-  road(ctx, OLD, 5);
-  // 在路口停一下，再拐弯
-  const d = MEET * ease(p(f, 34, 138));
-  ctx.fillStyle = P.yellow;
-  road(ctx, NEW, 3, d);
-  ctx.fillStyle = P.blue;
-  ctx.fillRect(160, 40, 16, 12);
-  ctx.fillStyle = P.orange;
-  ctx.fillRect(322, 162, 16, 12);
-  const hop = (at: number) => (f >= at && f < at + 24 ? Math.round(Math.abs(Math.sin(((f - at) / 12) * Math.PI)) * 4) : 0);
-  // TA 从家那头走过来
-  if (f >= 112) {
-    const tx = lerp(300, 258, ease(p(f, 112, 138)));
-    hero(ctx, tx, 176 - hop(150), 2, P.red, f < 138 ? Math.floor(f / 5) : 0, f + 31);
-  }
-  const [hx, hy] = along(d);
-  const moving = f >= 34 && f < 138;
-  if (f < 34) bubble(ctx, hx + 8, hy - 22, f);
-  hero(ctx, hx, hy + 2 - hop(144), 2, P.yellow, moving ? Math.floor(f / 5) : 0, f);
-  // 两人之间闪几下
-  if (f >= 144) {
-    ctx.fillStyle = P.yellow;
-    [[243, 150], [249, 144], [237, 143]].forEach(([x, y], i) => {
-      if (Math.floor((f + i * 5) / 6) % 3 === 0) ctx.fillRect(x, y, 2, 2);
-    });
-  }
 };
 
 export const Action: React.FC = () => {
   const f = useCurrentFrame();
-  const drawCb = useCallback(drawAction, []);
+  const drawCb = useCallback(drawOutro, []);
+  const cam = outroCam(f);
+  const [wx, wy] = toScreen(cam, TOP[0] + 26, TOP[1]);
+  const [hx, hy] = toScreen(cam, ...down(1));
+  const flash = Math.floor((f - FLASH[0]) / FLASH[1]);
   return (
     <AbsoluteFill>
       <PixelCanvas draw={drawCb} bloom />
-      <Txt x={180} y={38} size={36} color={P.sky}>公司</Txt>
-      <Txt x={340} y={160} size={36} color={P.orange}>家</Txt>
-      {f >= 34 && f < 70 && <Txt x={184} y={76} size={36} color={P.yellow}>新路线</Txt>}
+      {f >= 66 && f < 104 && (
+        <Txt x={wx} y={wy - 4} size={48} align="center" color={P.orange}>
+          ↓ 更差
+        </Txt>
+      )}
+      {f >= 108 && f < 144 && (
+        <Txt x={hx + 14} y={hy - 30 - (f - 108) * 0.8} size={48} color={P.orange} opacity={1 - p(f, 132, 144)}>
+          −1
+        </Txt>
+      )}
+      {f >= FLASH[0] && flash < 6 && <Flash i={flash} />}
     </AbsoluteFill>
   );
 };
 
-// ---- 片尾：图鉴页。第一格是这期收录的，其余还没解锁 ----
-const SLOT_W = 92;
-const SLOT_H = 62;
-const slotXY = (i: number): [number, number] => [44 + (i % 4) * (SLOT_W + 8), 62 + Math.floor(i / 4) * (SLOT_H + 20)];
-
-const drawEnd: Draw = (ctx, t) => {
-  drawSky(ctx, t, DAWN, 0, false);
-  for (let i = 0; i < 8; i++) {
-    if (t < 4 + i * 2) continue;
-    const [x, y] = slotXY(i);
-    ctx.fillStyle = i === 0 ? P.white : P.slate;
-    ctx.fillRect(x, y, SLOT_W, SLOT_H);
-    ctx.fillStyle = i === 0 ? P.navy : P.dark;
-    ctx.fillRect(x + 2, y + 2, SLOT_W - 4, SLOT_H - 4);
-  }
-  const [x, y] = slotXY(0);
-  const drop = easeOut(p(t, 22, 34));
-  if (t >= 22) monster(ctx, x + SLOT_W / 2, y + SLOT_H - 12 - Math.round((1 - drop) * 40), 3, 0.05 * Math.sin(t * 0.2));
-};
-
+// ---- 最后一帧：他已经在往那段更高的台阶上走。留一个问题 ----
+const QUESTION = '困住你的[山]，是什么？';
 export const End: React.FC = () => {
   const t = useCurrentFrame();
-  const drawCb = useCallback(drawEnd, []);
+  const drawCb: Draw = useCallback((ctx, fr) => drawOutro(ctx, 180 + fr), []);
   return (
     <AbsoluteFill>
       <PixelCanvas draw={drawCb} bloom />
-      <Txt x={240} y={28} size={96} align="center">
-        人生 <span style={{ color: P.sky }}>bug</span> 图鉴
-      </Txt>
-      {Array.from({ length: 8 }, (_, i) => {
-        if (t < 4 + i * 2) return null;
-        const [x, y] = slotXY(i);
-        return (
-          <React.Fragment key={i}>
-            {i > 0 && <Txt x={x + SLOT_W / 2} y={y + 16} size={96} align="center" color={P.slate}>?</Txt>}
-            <Txt x={x + SLOT_W / 2} y={y + SLOT_H + 4} size={36} align="center" color={i === 0 ? P.white : P.slate}>
-              {i === 0 ? (t >= 34 ? '001 局部最优' : '001') : `00${i + 1} ???`}
-            </Txt>
-          </React.Fragment>
-        );
-      })}
-      {t >= 36 && t % 20 < 13 && <Txt x={slotXY(0)[0] + 6} y={slotXY(0)[1] + 6} size={36} color={P.yellow}>NEW</Txt>}
+      <AbsoluteFill style={{ background: 'rgba(26,28,44,0.3)', opacity: p(t, 0, 8) }} />
+      <AbsoluteFill style={{ top: 250, alignItems: 'center', fontFamily: FONT, fontSize: 120, color: P.white, textShadow: `0 8px 0 ${P.ink}` }}>
+        <div style={{ minHeight: 120, lineHeight: '120px' }}>
+          <Typed text={QUESTION} start={8} perChar={2.2} />
+        </div>
+      </AbsoluteFill>
+      {t >= 40 && (
+        <Txt x={240} y={238} size={36} align="center" color={P.white} opacity={0.8}>
+          人生 bug 图鉴 · 001 局部最优
+        </Txt>
+      )}
     </AbsoluteFill>
   );
 };

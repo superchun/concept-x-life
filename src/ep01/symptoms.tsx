@@ -5,7 +5,7 @@ import { Txt } from '../lib/Text';
 import { clamp01, ease, easeOut, lerp, p } from '../lib/math';
 import { LH, LW, P, S } from '../lib/theme';
 import { SYMPTOMS } from './script';
-import { monster } from './world';
+import { hero, monster } from './world';
 
 const box = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill: string, border: string) => {
   ctx.fillStyle = border;
@@ -16,58 +16,52 @@ const box = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: 
 // 出现时放大再回弹
 const punch = (f: number, at: number) => (f < at ? 0 : 1 + 0.5 * (1 - easeOut(p(f, at, at + 8))));
 
-// 1 外卖：列表划到底，又弹回最上面那三家
-const drawTakeout: Draw = (ctx, f) => {
-  box(ctx, 196, 30, 88, 162, P.dark, P.grey);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(200, 36, 80, 150);
-  ctx.clip();
-  const scroll = f < 24 ? -110 * ease(p(f, 4, 24)) : -110 * (1 - easeOut(p(f, 24, 33)));
-  const thumbs = [P.orange, P.yellow, P.red, P.green, P.sky, P.plum, P.teal, P.blue, P.lime, P.cyan, P.orange, P.red];
-  thumbs.forEach((c, i) => {
-    const y = 40 + i * 20 + Math.round(scroll);
-    ctx.fillStyle = c;
-    ctx.fillRect(204, y, 14, 14);
-    ctx.fillStyle = P.white;
-    ctx.fillRect(222, y + 2, 34, 3);
-    ctx.fillStyle = P.slate;
-    ctx.fillRect(222, y + 8, 22, 2);
-    if (i < 3 && f >= 34) {
-      ctx.strokeStyle = P.yellow;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(202.5, y - 1.5, 75, 17);
-    }
-  });
-  ctx.restore();
-};
-// 2 歌单：唱片一直转，进度条走完又回到开头
-const drawPlaylist: Draw = (ctx, f) => {
-  for (let y = -36; y <= 36; y++) {
-    for (let x = -36; x <= 36; x++) {
-      const d = Math.hypot(x, y);
-      if (d > 36) continue;
-      ctx.fillStyle = d < 4 ? P.ink : d < 12 ? P.orange : Math.floor(d) % 6 === 0 ? P.slate : P.dark;
-      ctx.fillRect(240 + x, 96 + y, 1, 1);
-    }
-  }
-  const a = f * 0.35;
+// 1 奶茶：选框在四个新品上转了一圈，跳回左边的老样子
+const cup = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, k = 1) => {
+  ctx.fillStyle = P.grey;
+  ctx.fillRect(x + 2 * k, y - 15 * k, k, 5 * k);
   ctx.fillStyle = P.white;
-  ctx.fillRect(Math.round(240 + Math.cos(a) * 24) - 1, Math.round(96 + Math.sin(a) * 24) - 1, 3, 3);
-  ctx.fillStyle = P.slate;
-  ctx.fillRect(170, 156, 140, 4);
-  ctx.fillStyle = P.lime;
-  ctx.fillRect(170, 156, Math.round(((f * 7) % 140)), 4);
+  ctx.fillRect(x - 6 * k, y - 11 * k, 12 * k, 2 * k);
+  ctx.fillStyle = color;
+  ctx.fillRect(x - 5 * k, y - 9 * k, 10 * k, 9 * k);
+  ctx.fillRect(x - 4 * k, y, 8 * k, 2 * k);
+  ctx.fillStyle = P.ink;
+  for (let i = 0; i < 3; i++) ctx.fillRect(x - 3 * k + i * 3 * k, y - 2 * k, k, k);
 };
-// 3 理发：上次和这次一模一样
+const NEW_CUPS: [number, number, string][] = [
+  [254, 84, P.green],
+  [316, 84, P.red],
+  [254, 156, P.sky],
+  [316, 156, P.yellow],
+];
+const TEA_HOVER = [0, 1, 3, 2, 0, 1];
+const drawTea: Draw = (ctx, f) => {
+  const back = f >= 40;
+  box(ctx, 134, 44, 72, 132, P.dark, back ? P.yellow : P.slate);
+  cup(ctx, 170, 126, P.orange, 3);
+  const at = f >= 4 && !back ? TEA_HOVER[Math.min(5, Math.floor((f - 4) / 6))] : -1;
+  NEW_CUPS.forEach(([x, y, c], i) => {
+    box(ctx, x - 26, y - 32, 52, 60, P.dark, i === at ? P.yellow : P.slate);
+    cup(ctx, x, y + 14, c, 2);
+    ctx.fillStyle = P.yellow;
+    ctx.fillRect(x + 12, y - 30, 12, 6);
+  });
+};
+// 2 理发：脑子里闪过一个新发型，开口还是老样子
 const drawHaircut: Draw = (ctx, f) => {
   for (const x of [176, 304]) {
     ctx.fillStyle = P.yellow;
     ctx.fillRect(x - 16, 80, 32, 36);
-    ctx.fillStyle = P.plum;
-    ctx.fillRect(x - 19, 66, 38, 18);
-    ctx.fillRect(x - 19, 84, 6, 12);
-    ctx.fillRect(x + 13, 84, 6, 12);
+    if (x > 240 && f < 20 && Math.floor(f / 4) % 2 === 0) {
+      ctx.fillStyle = P.red;
+      ctx.fillRect(x - 17, 70, 34, 12);
+      for (let i = 0; i < 5; i++) ctx.fillRect(x - 16 + i * 7, 60, 4, 10);
+    } else {
+      ctx.fillStyle = P.plum;
+      ctx.fillRect(x - 19, 66, 38, 18);
+      ctx.fillRect(x - 19, 84, 6, 12);
+      ctx.fillRect(x + 13, 84, 6, 12);
+    }
     ctx.fillStyle = P.ink;
     ctx.fillRect(x - 8, 96, 3, 4);
     ctx.fillRect(x + 5, 96, 3, 4);
@@ -84,61 +78,64 @@ const drawHaircut: Draw = (ctx, f) => {
   ctx.fillRect(226, 88, 6, 5);
   ctx.fillRect(226, 96, 6, 5);
 };
-// 4 回家：同一条路越走越亮，别的街一直是暗的
-const ROUTE: [number, number][] = [
-  [168, 54],
-  [258, 54],
-  [258, 144],
-  [318, 144],
-  [318, 174],
-];
-const routeAt = (t: number): [number, number] => {
-  const lens = ROUTE.slice(1).map((q, i) => Math.abs(q[0] - ROUTE[i][0]) + Math.abs(q[1] - ROUTE[i][1]));
-  let d = clamp01(t) * lens.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < lens.length; i++) {
-    if (d <= lens[i]) {
-      return [lerp(ROUTE[i][0], ROUTE[i + 1][0], d / lens[i]), lerp(ROUTE[i][1], ROUTE[i + 1][1], d / lens[i])];
-    }
-    d -= lens[i];
-  }
-  return ROUTE[ROUTE.length - 1];
-};
-const drawCommute: Draw = (ctx, f) => {
-  ctx.fillStyle = P.dark;
-  for (let x = 138; x <= 348; x += 30) ctx.fillRect(x, 34, 2, 156);
-  for (let y = 54; y <= 174; y += 30) ctx.fillRect(132, y - 1, 220, 2);
-  const pass = Math.floor(f / 18);
-  const colors = [P.slate, P.teal, P.green, P.lime];
-  ctx.fillStyle = colors[Math.min(3, pass)];
-  const w = 2 + Math.min(3, pass);
-  ROUTE.slice(1).forEach((q, i) => {
-    const a = ROUTE[i];
-    ctx.fillRect(Math.min(a[0], q[0]) - w / 2, Math.min(a[1], q[1]) - w / 2, Math.abs(q[0] - a[0]) + w, Math.abs(q[1] - a[1]) + w);
+// 3 游戏：换了个新英雄，连输两把，选框回到第一个
+const HEROES = [P.yellow, P.cyan, P.lime, P.red, P.plum];
+const drawGame: Draw = (ctx, f) => {
+  const pick = f >= 4 && f < 38 ? 3 : 0;
+  HEROES.forEach((c, i) => {
+    const x = 152 + i * 44;
+    box(ctx, x - 19, 48, 38, 52, P.dark, i === pick ? P.yellow : P.slate);
+    hero(ctx, x, 94, 3, c, 0, 9);
   });
-  ctx.fillStyle = P.blue;
-  ctx.fillRect(160, 44, 16, 16);
-  ctx.fillStyle = P.orange;
-  ctx.fillRect(310, 170, 16, 14);
-  const [dx, dy] = routeAt((f % 18) / 18);
-  ctx.fillStyle = P.white;
-  ctx.fillRect(Math.round(dx) - 3, Math.round(dy) - 3, 6, 6);
+  const lost = (f >= 12 ? 1 : 0) + (f >= 24 ? 1 : 0);
+  if ((f >= 12 && f < 22) || (f >= 24 && f < 34)) box(ctx, 196, 116, 88, 30, P.red, P.ink);
+  // 段位星星，输一把掉一颗
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i < 3 - lost ? P.yellow : P.slate;
+    ctx.fillRect(216 + i * 20, 162, 8, 8);
+  }
 };
-// 5 辞职：光标移到「发送」上，又挪开
-const drawResume: Draw = (ctx, f) => {
-  box(ctx, 150, 30, 180, 162, P.white, P.grey);
-  ctx.fillStyle = P.slate;
-  ctx.fillRect(152, 32, 176, 16);
-  ctx.fillStyle = P.grey;
-  [60, 70, 80, 96, 106, 116, 126].forEach((y, i) => ctx.fillRect(164, y, [120, 90, 140, 110, 150, 80, 130][i], 3));
-  const hover = f >= 28 && f < 40;
-  box(ctx, 268, 164, 52, 20, hover ? P.lime : P.green, P.ink);
-  const cx = f < 40 ? lerp(190, 296, ease(p(f, 6, 28))) : lerp(296, 372, ease(p(f, 40, 56)));
-  const cy = f < 40 ? lerp(120, 176, ease(p(f, 6, 28))) : lerp(176, 150, ease(p(f, 40, 56)));
-  // 箭头光标
+// 4 学习：笔往下面没做过的题挪了挪，又回到第一题，再做一遍
+const drawStudy: Draw = (ctx, f) => {
+  box(ctx, 140, 30, 170, 162, P.white, P.grey);
+  const done = [3, 3, 0, 0, 0];
+  if (f >= 44) done[0] = 4;
+  done.forEach((n, i) => {
+    const y = 44 + i * 29;
+    ctx.fillStyle = P.grey;
+    ctx.fillRect(152, y, 70, 3);
+    ctx.fillRect(152, y + 8, 46, 3);
+    for (let k = 0; k < 4; k++) {
+      ctx.fillStyle = k < n ? P.green : i >= 2 && k === 0 ? P.red : '#dfe3ea';
+      ctx.fillRect(238 + k * 16, y, 11, 11);
+      if (i >= 2 && k === 0) {
+        ctx.fillStyle = P.white;
+        ctx.fillRect(240, y + 2, 7, 7);
+      }
+    }
+  });
+  // 铅笔
+  const row = f < 18 ? 3 * ease(p(f, 4, 18)) : f < 30 ? 3 + 0.08 * Math.sin(f * 1.6) : 3 * (1 - ease(p(f, 30, 42)));
+  const px = 226;
+  const py = Math.round(48 + row * 29);
+  ctx.fillStyle = P.orange;
+  for (let i = 0; i < 12; i++) ctx.fillRect(px - 14 + i, py - 14 + i, 3, 3);
   ctx.fillStyle = P.ink;
-  for (let i = 0; i < 9; i++) ctx.fillRect(Math.round(cx), Math.round(cy) + i, Math.min(i + 1, 10 - i) + 1, 1);
-  ctx.fillStyle = P.white;
-  for (let i = 1; i < 7; i++) ctx.fillRect(Math.round(cx) + 1, Math.round(cy) + i, Math.min(i, 7 - i), 1);
+  ctx.fillRect(px - 1, py - 1, 2, 2);
+};
+// 5 工作：老方法一趟趟跑完，新方法才走了一小段就被划掉
+const drawWork: Draw = (ctx, f) => {
+  const dropped = f >= 36;
+  box(ctx, 148, 66, 184, 20, P.dark, f >= 42 ? P.yellow : P.slate);
+  ctx.fillStyle = P.lime;
+  ctx.fillRect(150, 68, Math.round(((f % 12) / 12) * 180), 16);
+  box(ctx, 148, 126, 184, 20, P.dark, P.slate);
+  ctx.fillStyle = dropped ? P.slate : P.sky;
+  ctx.fillRect(150, 128, Math.round(p(f, 4, 36) * 60), 16);
+  if (dropped) {
+    ctx.fillStyle = P.red;
+    ctx.fillRect(144, 135, Math.round(p(f, 36, 42) * 192), 2);
+  }
 };
 // 6 关系：三句话之后，对方正在输入，然后没了
 const drawChat: Draw = (ctx, f) => {
@@ -152,12 +149,18 @@ const drawChat: Draw = (ctx, f) => {
   }
 };
 
-const DRAWS = [drawTakeout, drawPlaylist, drawHaircut, drawCommute, drawResume, drawChat];
+const DRAWS = [drawTea, drawHaircut, drawGame, drawStudy, drawWork, drawChat];
 
 const Extras: React.FC<{ i: number; f: number }> = ({ i, f }) => {
-  if (i === 0) return <Txt x={292} y={44} size={48} color={P.yellow} scale={punch(f, 38)} opacity={f >= 38 ? 1 : 0}>第 147 次</Txt>;
-  if (i === 1) return <Txt x={240} y={170} size={48} align="center" color={P.grey}>已循环 {1205 + Math.floor(f / 20)} 次</Txt>;
-  if (i === 2) {
+  if (i === 0) {
+    return (
+      <>
+        <Txt x={281} y={36} size={36} align="center" color={P.grey}>新品</Txt>
+        <Txt x={170} y={150} size={48} align="center" color={P.yellow} scale={punch(f, 40)} opacity={f >= 40 ? 1 : 0}>老样子</Txt>
+      </>
+    );
+  }
+  if (i === 1) {
     return (
       <>
         <Txt x={176} y={126} size={36} align="center" color={P.grey}>上次</Txt>
@@ -166,20 +169,28 @@ const Extras: React.FC<{ i: number; f: number }> = ({ i, f }) => {
       </>
     );
   }
+  if (i === 2) {
+    return (
+      <>
+        {((f >= 12 && f < 22) || (f >= 24 && f < 34)) && <Txt x={240} y={119} size={72} align="center">失败</Txt>}
+        <Txt x={152} y={104} size={36} align="center" color={P.yellow} scale={punch(f, 40)} opacity={f >= 40 ? 1 : 0}>本命</Txt>
+      </>
+    );
+  }
   if (i === 3) {
     return (
       <>
-        <Txt x={180} y={38} size={36} color={P.sky}>公司</Txt>
-        <Txt x={330} y={172} size={36} color={P.orange}>家</Txt>
+        <Txt x={316} y={52} size={36} color={P.green}>熟悉</Txt>
+        <Txt x={316} y={126} size={36} color={P.red}>薄弱</Txt>
       </>
     );
   }
   if (i === 4) {
     return (
       <>
-        <Txt x={158} y={35} size={36}>简历.doc</Txt>
-        <Txt x={164} y={140} size={48} color={P.red} scale={punch(f, 14)} opacity={f >= 14 ? 1 : 0}>上次修改：2 年前</Txt>
-        <Txt x={294} y={169} size={36} align="center" color={P.ink}>发送</Txt>
+        <Txt x={150} y={52} size={36} color={P.lime}>老方法</Txt>
+        <Txt x={150} y={112} size={36} color={f >= 36 ? P.grey : P.sky}>新方法</Txt>
+        <Txt x={262} y={154} size={48} color={P.red} scale={punch(f, 36)} opacity={f >= 36 ? 1 : 0}>太慢</Txt>
       </>
     );
   }
@@ -223,6 +234,7 @@ const Screen: React.FC<{ i: number }> = ({ i }) => {
   const { scene, dur, text } = SYMPTOMS[i];
   // 小动画按 60 帧设计，短屏就加速播放
   const f = (raw * 60) / dur;
+  const back = Math.round((38 * dur) / 60);
   const slide = Math.round(((1 - easeOut(p(raw, 0, 5))) * LW) / 2) * S * 2;
   const draw: Draw = useCallback((ctx, fr) => DRAWS[scene](ctx, (fr * 60) / dur), [scene, dur]);
   const bugs: Draw = useCallback(
@@ -243,10 +255,28 @@ const Screen: React.FC<{ i: number }> = ({ i }) => {
           <PixelCanvas draw={draw} />
           <Extras i={scene} f={f} />
         </AbsoluteFill>
-        <Txt x={284} y={84} size={96} color={P.yellow} scale={punch(raw, 2)} opacity={raw >= 2 ? 1 : 0}>{text[0]}</Txt>
-        <Txt x={284} y={124} size={72} scale={punch(raw, 6)} opacity={raw >= 6 ? 1 : 0}>{text[1]}</Txt>
+        <Txt x={284} y={70} size={96} color={P.yellow} scale={punch(raw, 2)} opacity={raw >= 2 ? 1 : 0}>{text[0]}</Txt>
+        <Txt x={284} y={112} size={60} scale={punch(raw, 6)} opacity={raw >= 6 ? 1 : 0}>{text[1]}</Txt>
+        {/* 第二行等小动画退回去的那一下再出现 */}
+        <Txt x={284} y={136} size={60} color={P.sky} scale={punch(raw, back)} opacity={raw >= back ? 1 : 0}>{text[2]}</Txt>
       </AbsoluteFill>
       <PixelCanvas draw={bugs} />
+    </AbsoluteFill>
+  );
+};
+
+// 结尾闪回用：某一屏定格在「退回去」之后的样子，只留名字
+export const Flash: React.FC<{ i: number }> = ({ i }) => {
+  const { scene, text } = SYMPTOMS[i];
+  const draw: Draw = useCallback((ctx) => DRAWS[scene](ctx, 58), [scene]);
+  return (
+    <AbsoluteFill style={{ background: P.ink }}>
+      <PixelCanvas draw={drawPanel} />
+      <AbsoluteFill style={{ transform: `translate(${-SHIFT * S}px, ${4 * S}px)` }}>
+        <PixelCanvas draw={draw} />
+        <Extras i={scene} f={58} />
+      </AbsoluteFill>
+      <Txt x={284} y={100} size={144} color={P.yellow}>{text[0]}</Txt>
     </AbsoluteFill>
   );
 };
