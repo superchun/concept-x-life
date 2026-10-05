@@ -5,18 +5,20 @@ export const FPS = 30;
 export const BAR = 90;
 
 export type Rgb = [number, number, number];
-// 系列配色：墨蓝坐标纸底、米白线稿，青色和黄色两支荧光笔
-export const WHITE: Rgb = [238, 232, 216];
-export const COLD: Rgb = [92, 214, 200];
-export const HOT: Rgb = [255, 208, 60];
-export const INK: Rgb = [12, 22, 28];
-export const BG = '#0c161c';
+// 《人生 bug 图鉴》配色：深灰界面底，红 = bug / 卡住，绿 = 修复 / 通过，黄 = 运行中
+export const TEXT: Rgb = [236, 233, 226];
+export const DIM: Rgb = [139, 139, 150];
+export const RED: Rgb = [255, 92, 96];
+export const GREEN: Rgb = [53, 211, 154];
+export const YELLOW: Rgb = [255, 207, 74];
+export const BLOCK: Rgb = [44, 44, 54];
+export const BG = '#131316';
+export const PANEL = '#1c1c21';
+export const LINE = '#32323c';
 
 export const rgba = (c: Rgb, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 export const FONT = {
-  serif: '"Songti SC","Noto Serif SC","Source Han Serif SC",serif',
   sans: '"PingFang SC","Hiragino Sans GB","STHeiti",sans-serif',
-  mono: '"SF Mono",Menlo,monospace',
-  latin: '"Times New Roman",Georgia,serif',
+  mono: '"SF Mono",Menlo,"PingFang SC",monospace',
 };

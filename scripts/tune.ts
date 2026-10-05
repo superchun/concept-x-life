@@ -10,7 +10,6 @@ import {
   annealPath,
   peakOf,
 } from '../src/ep01/sim';
-import { FIELD, FIELD_MAIN_SHARE } from '../src/ep01/sim2d';
 
 console.log('爬山 各山顶数量', CLIMB_COUNTS, '到达最高峰', CLIMB_MAIN);
 console.log('退火 到达最高峰', ANNEAL_MAIN);
@@ -27,4 +26,3 @@ for (let seed = 1; seed < 400 && good.length < 8; seed++) {
   if (visited.size >= 4 && settled && !early) good.push(seed);
 }
 console.log('可用主角种子', good);
-console.log('二维场 粒子数', FIELD.n, '最终落在最高峰的比例', FIELD_MAIN_SHARE.toFixed(3));

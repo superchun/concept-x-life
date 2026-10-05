@@ -1,13 +1,13 @@
 import React, { useCallback } from 'react';
 import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { Canvas, type Draw } from '../lib/Canvas';
-import { BigText, Reveal } from '../lib/Text';
-import { clamp01, ease, lerp, mix, p } from '../lib/math';
-import { COLD, FONT, HOT, WHITE, rgba } from '../lib/theme';
+import { Rich, Typed } from '../lib/Text';
+import { clamp01, ease, easeOut, lerp, mix, p } from '../lib/math';
+import { BLOCK, DIM, FONT, GREEN, LINE, PANEL, RED, TEXT, YELLOW, rgba, type Rgb } from '../lib/theme';
 import {
   ANNEAL,
-  ANNEAL_END,
   ANNEAL_MAIN,
+  ANNEAL_RUNS,
   CLIMB,
   CLIMB_COUNTS,
   CLIMB_END,
@@ -17,99 +17,192 @@ import {
   MAIN,
   N,
   PEAKS,
+  SETTLE,
   climbPath,
   f,
   peakOf,
 } from './sim';
-import { FIELD, FIELD_SIM } from './sim2d';
-import { FULL, dot, drawField, drawLandscape, label, lerpCam, on, proj, type Cam } from './world';
+import { SYMPTOMS } from './script';
+import { BASE, CW, agent, colH, colOf, colX, drawTerrain, label, peakXY } from './world';
 
-const hud: React.CSSProperties = { position: 'absolute', fontFamily: FONT.mono, color: rgba(WHITE) };
+const panel: React.CSSProperties = {
+  position: 'absolute',
+  background: PANEL,
+  border: `2px solid ${LINE}`,
+  borderRadius: 16,
+};
+const mono: React.CSSProperties = { fontFamily: FONT.mono, color: rgba(TEXT) };
+const sans: React.CSSProperties = { fontFamily: FONT.sans, fontWeight: 600, color: rgba(TEXT) };
 
-// 山顶两侧各探出一步又退回来：往哪走都是下坡
-const probes = (ctx: CanvasRenderingContext2D, cam: Cam, peak: number, q: number, word = '更差') => {
-  const c = PEAKS[peak][0];
+// 山顶两侧各探出几格又退回来：往哪走都是下坡
+const probes = (ctx: CanvasRenderingContext2D, peak: number, q: number, size: number) => {
+  const c = colOf(PEAKS[peak][0]);
   const env = Math.sin(clamp01(q) * Math.PI);
-  const d = 0.03 * Math.abs(Math.sin(q * Math.PI * 2));
+  const d = Math.round(3 * Math.abs(Math.sin(q * Math.PI * 2)));
   for (const s of [-1, 1]) {
-    const [sx, sy] = on(c + s * d, cam);
-    dot(ctx, sx, sy, 4, COLD, 0.75 * env);
-    const [lx, ly] = on(c + s * 0.047, cam);
-    label(ctx, `↓ ${word}`, lx + s * 40, ly - 6, { size: 30, c: COLD, alpha: env, font: FONT.mono });
+    if (d > 0) agent(ctx, c + s * d, 0, size, RED, 0.7 * env);
+    label(ctx, '↓', colX(c + s * 5) + CW / 2, BASE - colH(c + s * 5) - 34, { size: 30, c: RED, alpha: env, font: FONT.mono });
   }
 };
 
-// ---- A：hook。十年每一步都选对，然后被困住，镜头拉开才看到真正的高山 ----
-const ZOOM: Cam = { cx: 0.2, cy: 0.2, z: 3 };
-
+// ---- A：症状。六张卡片半小节一张，从小事到大事，最后并成一个 bug ----
 export const SceneA: React.FC = () => {
   const frame = useCurrentFrame();
-  const draw: Draw = useCallback((ctx, fr) => {
-    const cam = lerpCam(ZOOM, FULL, ease(p(fr, 270, 335)));
-    drawLandscape(ctx, cam, p(fr, 0, 12));
-    const x = lerp(0.148, PEAKS[1][0], ease(p(fr, 8, 172)));
-    if (fr >= 180 && fr < 270) probes(ctx, cam, 1, (fr - 180) / 90);
-    const [hx, hy] = on(x, cam);
-    dot(ctx, hx, hy, lerp(13, 8, p(fr, 270, 335)), HOT, p(fr, 4, 16));
-    const a = p(fr, 322, 344);
-    if (a > 0) {
-      const [mx, my] = on(PEAKS[MAIN][0], cam);
-      label(ctx, '你', hx, hy - 40, { size: 38, alpha: a, weight: 900 });
-      label(ctx, '最高点', mx, my - 42, { size: 38, c: COLD, alpha: a, weight: 900 });
-      dot(ctx, mx, my, 5, COLD, a * (0.6 + 0.4 * Math.sin(fr * 0.25)));
-    }
-  }, []);
-  const days = Math.round(3650 * ease(p(frame, 8, 172)));
+  const merge = ease(p(frame, 270, 300));
   return (
     <AbsoluteFill>
-      <Canvas draw={draw} />
-      <div style={{ ...hud, left: 130, top: 110, opacity: p(frame, 6, 20) * (1 - p(frame, 262, 280)) }}>
-        <div style={{ fontSize: 30, color: rgba(WHITE, 0.55), letterSpacing: 4, fontFamily: FONT.sans }}>连续选对</div>
-        <div style={{ fontSize: 96, fontWeight: 700, marginTop: 6 }}>
-          {days.toLocaleString('en-US')}
-          <span style={{ fontSize: 40, marginLeft: 14, fontFamily: FONT.serif }}>天</span>
-        </div>
-        <div style={{ fontSize: 32, color: rgba(COLD, 0.95), marginTop: 6, fontFamily: FONT.sans }}>向下 0 步</div>
+      {SYMPTOMS.map(([emoji, text], i) => {
+        const at = i * 45;
+        const pop = easeOut(p(frame, at, at + 9));
+        const x = 120 + (i % 3) * 572;
+        const y = 122 + Math.floor(i / 3) * 384;
+        const stamp = easeOut(p(frame, at + 18, at + 28));
+        return (
+          <div
+            key={text}
+            style={{
+              ...panel,
+              ...sans,
+              left: lerp(x, 692, merge),
+              top: lerp(y, 314, merge) + (1 - pop) * 30,
+              width: 536,
+              height: 352,
+              padding: '34px 38px',
+              boxSizing: 'border-box',
+              opacity: pop * (1 - p(frame, 288, 306)),
+              transform: `rotate(${(1 - merge) * ((i % 2) * 2 - 1) * 1.2}deg) scale(${lerp(1, 0.86, merge)})`,
+            }}
+          >
+            <div style={{ fontSize: 84, lineHeight: 1 }}>{emoji}</div>
+            <div style={{ fontSize: 44, lineHeight: 1.35, marginTop: 26 }}>{text}</div>
+            <div style={{ ...mono, position: 'absolute', left: 38, bottom: 30, fontSize: 24, color: rgba(DIM) }}>
+              症状 #{String(i + 1).padStart(2, '0')}
+            </div>
+            <div
+              style={{
+                position: 'absolute',
+                right: 30,
+                bottom: 24,
+                padding: '4px 16px',
+                border: `3px solid ${rgba(RED)}`,
+                borderRadius: 8,
+                color: rgba(RED),
+                fontSize: 28,
+                opacity: stamp,
+                transform: `rotate(-6deg) scale(${lerp(1.6, 1, stamp)})`,
+              }}
+            >
+              我也是
+            </div>
+          </div>
+        );
+      })}
+      <div
+        style={{
+          ...sans,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 400,
+          textAlign: 'center',
+          fontSize: 120,
+          letterSpacing: 6,
+          opacity: p(frame, 300, 314),
+        }}
+      >
+        6 条症状 <span style={{ color: rgba(DIM) }}>→</span> <span style={{ color: rgba(RED) }}>1 个 bug</span>
       </div>
     </AbsoluteFill>
   );
 };
 
-// ---- B：标题卡。左对齐的编号 + 概念名 + 一句话定义 ----
+// ---- B：图鉴条目卡。左边是标本图，右边是编号、名称和几行说明 ----
+const specimen: Draw = (ctx, fr) => {
+  const hill = (x: number) => 150 * Math.exp(-((x - 0.36) ** 2) / 0.02) + 330 * Math.exp(-((x - 1.02) ** 2) / 0.03);
+  for (let c = 0; c < 26; c++) {
+    const h = Math.round(hill((c + 0.5) / 26) / 6) * 6 + 18;
+    ctx.fillStyle = rgba(BLOCK);
+    ctx.fillRect(196 + c * 18, 760 - h, 17, h);
+    ctx.fillStyle = rgba(TEXT, 0.5);
+    ctx.fillRect(196 + c * 18, 760 - h, 17, 3);
+  }
+  // 小方块在小山顶上左右试探，每次都退回来
+  const d = Math.round(2 * Math.sin(fr * 0.12));
+  const c = 9 + d;
+  const h = Math.round(hill((c + 0.5) / 26) / 6) * 6 + 18;
+  ctx.fillStyle = rgba(RED);
+  ctx.fillRect(196 + c * 18, 760 - h - 21, 17, 17);
+};
+
 export const SceneB: React.FC = () => {
   const frame = useCurrentFrame();
+  const rows: [string, React.ReactNode][] = [
+    ['表现', '每一步都在变好，却到不了最好。'],
+    ['高发', '越会做选择的人，越容易中。'],
+    ['状态', <span style={{ color: rgba(RED) }}>● 未修复</span>],
+  ];
   return (
-    <AbsoluteFill style={{ opacity: 1 - p(frame, 150, 168), color: rgba(WHITE) }}>
-      <div style={{ position: 'absolute', left: 230, top: 236 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24, opacity: p(frame, 0, 14) }}>
-          <span style={{ fontFamily: FONT.mono, fontSize: 40, fontWeight: 700, color: rgba(HOT) }}>No.01</span>
-          <span style={{ width: lerp(0, 420, ease(p(frame, 6, 40))), height: 2, background: rgba(WHITE, 0.5) }} />
+    <AbsoluteFill>
+      <div style={{ ...panel, left: 160, top: 250, width: 540, height: 540, opacity: p(frame, 0, 10) }} />
+      <Canvas draw={specimen} opacity={p(frame, 4, 16)} />
+      <div style={{ position: 'absolute', left: 790, top: 236, ...sans }}>
+        <div style={{ ...mono, fontSize: 44, fontWeight: 700, color: rgba(RED), opacity: p(frame, 4, 14) }}>BUG-001</div>
+        <div
+          style={{
+            fontSize: 190,
+            lineHeight: 1.25,
+            letterSpacing: 8,
+            WebkitTextStroke: `3px ${rgba(TEXT)}`,
+            opacity: p(frame, 10, 22),
+            transform: `translateX(${(1 - easeOut(p(frame, 10, 26))) * 40}px)`,
+          }}
+        >
+          局部最优
         </div>
-        <div style={{ fontFamily: FONT.serif, fontWeight: 900, fontSize: 250, letterSpacing: 10, lineHeight: 1.35 }}>
-          <Reveal text="局部[最优]" start={10} tone="hot" perChar={7} />
-        </div>
-        <div style={{ fontFamily: FONT.mono, fontSize: 32, letterSpacing: 16, color: rgba(WHITE, 0.55), opacity: p(frame, 50, 68) }}>
+        <div style={{ ...mono, fontSize: 30, letterSpacing: 14, color: rgba(DIM), opacity: p(frame, 22, 34) }}>
           LOCAL OPTIMUM
         </div>
-        <div style={{ fontFamily: FONT.sans, fontWeight: 600, fontSize: 46, letterSpacing: 3, marginTop: 56 }}>
-          <Reveal text="每一步都在变好，却到不了最好。" start={72} perChar={1.6} />
+        <div style={{ marginTop: 46, fontSize: 38, lineHeight: 1.9 }}>
+          {rows.map(([k, v], i) => (
+            <div key={k} style={{ opacity: p(frame, 40 + i * 14, 52 + i * 14) }}>
+              <span style={{ color: rgba(DIM), marginRight: 34 }}>{k}</span>
+              {v}
+            </div>
+          ))}
         </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-// ---- C：爬山算法。100 个点，只有少数到了最高的山 ----
+// ---- C：复现。只往高处走的规则，100 个方块只有少数到了最高的山 ----
 const DEMO = climbPath(0.6, 120);
 
-const countsAbovePeaks = (ctx: CanvasRenderingContext2D, alpha: number) => {
-  PEAKS.forEach(([c, h], k) => {
-    const [sx, sy] = proj(c, h + 0.03, FULL);
+// 把一组方块按所在列叠起来画
+const drawCrowd = (
+  ctx: CanvasRenderingContext2D,
+  xs: (i: number) => number,
+  style: (i: number) => { c: Rgb; a: number; dy?: number } | null,
+) => {
+  const stack = new Map<number, number>();
+  for (let i = 0; i < N; i++) {
+    const s = style(i);
+    if (!s) continue;
+    const c = colOf(xs(i));
+    const k = stack.get(c) ?? 0;
+    stack.set(c, k + 1);
+    agent(ctx, c, k, 9, s.c, s.a, s.dy ?? 0);
+  }
+};
+
+const stackCounts = (ctx: CanvasRenderingContext2D, alpha: number) => {
+  PEAKS.forEach((_, k) => {
+    const [sx, sy] = peakXY(k);
     const main = k === MAIN;
-    label(ctx, String(CLIMB_COUNTS[k]), sx, sy - 44, {
-      size: main ? 64 : 40,
-      c: main ? WHITE : COLD,
-      alpha: alpha * (main ? 1 : 0.85),
+    label(ctx, String(CLIMB_COUNTS[k]), sx, sy - CLIMB_COUNTS[k] * 10 - 40, {
+      size: main ? 60 : 38,
+      c: main ? GREEN : RED,
+      alpha,
       font: FONT.mono,
       weight: 700,
     });
@@ -119,350 +212,365 @@ const countsAbovePeaks = (ctx: CanvasRenderingContext2D, alpha: number) => {
 export const SceneC: React.FC = () => {
   const frame = useCurrentFrame();
   const draw: Draw = useCallback((ctx, fr) => {
-    drawLandscape(ctx, FULL, 1);
-    // 演示用的单个点：就落在大山脚下，却爬向了旁边的小山
+    drawTerrain(ctx, 1);
+    // 演示用的单个方块：就落在大山脚下，却爬向了旁边的小山
     const demoA = p(fr, 16, 30) * (1 - p(fr, 250, 268));
-    if (demoA > 0) {
-      const [sx, sy] = on(DEMO[Math.round(clamp01((fr - 100) / 110) * 120)], FULL);
-      dot(ctx, sx, sy, 9, HOT, demoA);
-    }
+    agent(ctx, colOf(DEMO[Math.round(clamp01((fr - 100) / 110) * 120)]), 0, 26, YELLOW, demoA);
     if (fr >= 270) {
-      const blue = p(fr, 540, 572);
-      for (let i = 0; i < N; i++) {
-        const fall = p(fr, 270 + i * 0.5, 298 + i * 0.5);
-        if (fall <= 0) continue;
-        const x = CLIMB[i][Math.round(clamp01((fr - 380) / 110) * CLIMB_STEPS)];
-        const [sx, sy] = on(x, FULL);
-        const main = peakOf(CLIMB_END[i]) === MAIN;
-        dot(
-          ctx,
-          sx,
-          lerp(-30, sy, fall * fall),
-          main ? lerp(4, 5.5, blue) : 4,
-          main ? WHITE : mix(WHITE, COLD, blue),
-          main ? 0.95 : lerp(0.9, 0.7, blue),
-        );
-      }
-      countsAbovePeaks(ctx, p(fr, 452, 474));
+      const idx = Math.round(clamp01((fr - 380) / 110) * CLIMB_STEPS);
+      const green = p(fr, 452, 474);
+      const red = p(fr, 540, 566);
+      drawCrowd(
+        ctx,
+        (i) => CLIMB[i][idx],
+        (i) => {
+          const fall = p(fr, 270 + i * 0.5, 298 + i * 0.5);
+          if (fall <= 0) return null;
+          const main = peakOf(CLIMB_END[i]) === MAIN;
+          return { c: main ? mix(TEXT, GREEN, green) : mix(TEXT, RED, red), a: 1, dy: -(1 - fall * fall) * 700 };
+        },
+      );
+      stackCounts(ctx, green);
     }
-    if (fr >= 630 && fr < 720) {
-      for (const k of [0, 1, 2, 3, 5]) probes(ctx, FULL, k, (fr - 630) / 90, '');
-    }
+    if (fr >= 630 && fr < 720) for (const k of [0, 1, 2, 3, 5]) probes(ctx, k, (fr - 630) / 90, 9);
   }, []);
+  const bugLine = p(frame, 724, 740);
   return (
     <AbsoluteFill>
       <Canvas draw={draw} />
-      <div style={{ ...hud, left: 130, top: 100, opacity: p(frame, 10, 28) }}>
-        <div style={{ fontFamily: FONT.serif, fontWeight: 900, fontSize: 52, letterSpacing: 6 }}>爬山算法</div>
-        <div style={{ fontSize: 22, color: rgba(WHITE, 0.45), letterSpacing: 6, marginTop: 8 }}>HILL CLIMBING</div>
-        <div style={{ fontSize: 36, color: rgba(COLD), marginTop: 26, opacity: p(frame, 96, 112) }}>
-          if f(x′) &gt; f(x) : x ← x′
+      <div style={{ ...panel, ...mono, left: 120, top: 112, padding: '22px 34px', fontSize: 32, lineHeight: 1.6, opacity: p(frame, 92, 106) }}>
+        <div style={{ color: rgba(DIM) }}>function 下一步() {'{'}</div>
+        <div>{'  '}if (那边更高) 走过去();</div>
+        <div
+          style={{
+            color: rgba(mix(DIM, RED, bugLine)),
+            textDecoration: bugLine > 0.5 ? `underline wavy ${rgba(RED)}` : undefined,
+            textUnderlineOffset: 8,
+          }}
+        >
+          {'  '}// 否则：原地不动
         </div>
+        <div style={{ color: rgba(DIM) }}>{'}'}</div>
       </div>
     </AbsoluteFill>
   );
 };
 
-// ---- D：人也一样。小山顶就是舒适区 ----
+// ---- D：根因。把开头的症状贴回小山顶上 ----
 const LIFE: [number, string][] = [
-  [1, '还行的工作'],
-  [2, '熟悉的城市'],
-  [3, '早就会做的事'],
+  [1, '🍜 那三家外卖'],
+  [2, '💼 还行的工作'],
+  [3, '💬 挑不出错的关系'],
 ];
 
 export const SceneD: React.FC = () => {
   const frame = useCurrentFrame();
   const draw: Draw = useCallback((ctx, fr) => {
-    const g = lerp(1, 0.2, p(fr, 540, 580));
-    drawLandscape(ctx, FULL, g);
-    const others = lerp(0.7, 0.28, p(fr, 0, 40)) * g;
-    for (let i = 0; i < N; i++) {
-      const [sx, sy] = on(CLIMB_END[i], FULL);
-      const main = peakOf(CLIMB_END[i]) === MAIN;
-      dot(ctx, sx, sy, 4, main ? WHITE : COLD, main ? others * 0.8 : others);
+    const dim = lerp(1, 0.25, p(fr, 540, 575));
+    drawTerrain(ctx, dim);
+    const crowd = 1 - p(fr, 0, 40);
+    if (crowd > 0) {
+      drawCrowd(
+        ctx,
+        (i) => CLIMB_END[i],
+        (i) => ({ c: peakOf(CLIMB_END[i]) === MAIN ? GREEN : RED, a: crowd }),
+      );
+      stackCounts(ctx, crowd);
     }
-    countsAbovePeaks(ctx, 1 - p(fr, 0, 24));
-    LIFE.forEach(([k, name], i) => {
-      const a = p(fr, 96 + i * 90, 116 + i * 90) * g;
-      const [sx, sy] = proj(PEAKS[k][0], PEAKS[k][1] + 0.03, FULL);
-      ctx.strokeStyle = rgba(WHITE, 0.35 * a);
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy - 14);
-      ctx.lineTo(sx, sy - 44);
-      ctx.stroke();
-      label(ctx, name, sx, sy - 72, { size: 38, alpha: a, weight: 700 });
-    });
     if (fr >= 360 && fr < 450) {
-      probes(ctx, FULL, 3, (fr - 360) / 90, '');
-      const [vx, vy] = proj(0.602, 0.8, FULL);
+      probes(ctx, 3, (fr - 360) / 90, 26);
       ['收入 ↓', '确定性 ↓', '面子 ↓'].forEach((s, i) => {
         const a = p(fr, 372 + i * 12, 386 + i * 12) * (1 - p(fr, 436, 450));
-        label(ctx, s, vx, vy + i * 52, { size: 36, c: COLD, alpha: a, weight: 700, align: 'left' });
+        label(ctx, s, 1050, 330 + i * 56, { size: 40, c: RED, alpha: a, weight: 600, align: 'left' });
       });
     }
-    const [hx, hy] = on(PEAKS[3][0], FULL);
-    dot(ctx, hx, hy, 9, HOT, p(fr, 0, 30) * g);
+    agent(ctx, colOf(PEAKS[3][0]), 0, 26, YELLOW, p(fr, 10, 40) * dim);
   }, []);
   return (
     <AbsoluteFill>
       <Canvas draw={draw} />
+      {LIFE.map(([k, name], i) => {
+        const [sx, sy] = peakXY(k);
+        const a = easeOut(p(frame, 96 + i * 90, 110 + i * 90));
+        return (
+          <div
+            key={name}
+            style={{
+              ...panel,
+              ...sans,
+              left: sx,
+              top: sy - (k === 3 ? 118 : 92) - (1 - a) * 16,
+              transform: 'translateX(-50%)',
+              padding: '8px 22px',
+              fontSize: 34,
+              whiteSpace: 'nowrap',
+              borderRadius: 10,
+              opacity: a * (1 - p(frame, 540, 566)),
+            }}
+          >
+            {name}
+          </div>
+        );
+      })}
       {frame >= 540 && (
-        <BigText
-          out={896}
-          lines={[
-            { text: '待在舒适区，不是因为你懒。', at: 552 },
-            { text: '是因为你太会选[「更好」]了。', at: 650 },
-          ]}
-        />
+        <div style={{ position: 'absolute', left: 200, top: 250, ...sans, opacity: 1 - p(frame, 884, 898) }}>
+          <div
+            style={{
+              ...mono,
+              display: 'inline-block',
+              fontSize: 30,
+              fontWeight: 700,
+              padding: '6px 20px',
+              borderRadius: 8,
+              background: rgba(RED),
+              color: '#131316',
+              opacity: p(frame, 546, 556),
+            }}
+          >
+            根因 ROOT CAUSE
+          </div>
+          <div style={{ fontSize: 100, lineHeight: 1.6, letterSpacing: 4, marginTop: 30 }}>
+            <div>
+              <Typed text="待在舒适区，不是因为你懒。" start={556} perChar={2.4} cursor={false} />
+            </div>
+            <div>
+              <Typed text="是因为你太会选[「更好」]了。" start={650} perChar={2.4} cursor={false} />
+            </div>
+          </div>
+        </div>
       )}
     </AbsoluteFill>
   );
 };
 
-// ---- E：模拟退火。允许偶尔走一步更差的 ----
-const PAPER = 'Optimization by Simulated Annealing';
-
+// ---- E：补丁。模拟退火就是给规则改一行 ----
 export const SceneE: React.FC = () => {
   const frame = useCurrentFrame();
   const step = Math.round(clamp01((frame - 290) / 400) * ANNEAL.steps);
   const T = HERO.ts[step];
   // 温度按对数刻度归一到 0..1
-  const heat = Math.log(T / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1);
+  const heat = clamp01(Math.log(T / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1));
   const draw: Draw = useCallback((ctx, fr) => {
     const a = p(fr, 270, 300);
     if (a <= 0) return;
-    drawLandscape(ctx, FULL, a);
+    drawTerrain(ctx, a);
     const s = Math.round(clamp01((fr - 290) / 400) * ANNEAL.steps);
-    const h = Math.log(HERO.ts[s] / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1);
-    const c = mix(WHITE, HOT, clamp01(h * 1.2));
-    const end = p(fr, 810, 840);
-    if (end > 0) {
-      for (let i = 0; i < N; i++) {
-        const [sx, sy] = on(ANNEAL_END[i], FULL);
-        dot(ctx, sx, sy, 4, mix(WHITE, HOT, 0.6), 0.85 * end);
-      }
+    const h = clamp01(Math.log(HERO.ts[s] / ANNEAL.T1) / Math.log(ANNEAL.T0 / ANNEAL.T1));
+    const c = mix(GREEN, YELLOW, clamp01(h * 2.5));
+    // 最近 14 步留下的脚印
+    for (let k = Math.max(0, s - 14); k < s; k++) {
+      agent(ctx, colOf(HERO.xs[k]), 0, 26, c, 0.28 * ((k - (s - 14)) / 14) * a);
     }
-    // 轨迹：最近 26 步
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const from = Math.max(0, s - 26);
-    for (let k = from + 1; k <= s; k++) {
-      const [x0, y0] = on(HERO.xs[k - 1], FULL);
-      const [x1, y1] = on(HERO.xs[k], FULL);
-      ctx.strokeStyle = rgba(c, 0.5 * ((k - from) / 26) ** 2 * a);
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    }
-    ctx.restore();
-    const [hx, hy] = on(HERO.xs[s], FULL);
-    dot(ctx, hx, hy, 10, c, a * (1 - end * 0.3));
+    agent(ctx, colOf(HERO.xs[s]), 0, 26, c, a);
   }, []);
 
-  const formulaT = ease(p(frame, 262, 296));
+  const shrink = ease(p(frame, 262, 296));
   return (
     <AbsoluteFill>
       <Canvas draw={draw} />
       {frame < 182 && (
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 400,
-            textAlign: 'center',
-            fontFamily: FONT.latin,
-            color: rgba(WHITE),
-            opacity: 1 - p(frame, 166, 182),
-          }}
-        >
-          <div style={{ fontSize: 70, fontStyle: 'italic' }}>
-            {PAPER.slice(0, Math.round(p(frame, 10, 66) * PAPER.length))}
+        <div style={{ ...mono, position: 'absolute', left: 260, top: 290, fontSize: 40, lineHeight: 1.7, opacity: 1 - p(frame, 168, 182) }}>
+          <div style={{ color: rgba(YELLOW) }}>
+            <Typed text="commit 1983-05-13" start={8} cursor={false} />
           </div>
-          <div style={{ fontSize: 32, color: rgba(WHITE, 0.6), marginTop: 26, opacity: p(frame, 66, 84) }}>
-            S. Kirkpatrick · C. D. Gelatt · M. P. Vecchi — <i>Science</i>, 13 May 1983
-          </div>
-          <div
-            style={{
-              width: 560,
-              height: 4,
-              margin: '46px auto 0',
-              borderRadius: 2,
-              opacity: p(frame, 92, 104),
-              background: rgba(mix(HOT, COLD, p(frame, 104, 166))),
-            }}
-          />
+          <div style={{ color: rgba(DIM), opacity: p(frame, 34, 46) }}>Author: Kirkpatrick · Gelatt · Vecchi (IBM)</div>
+          <div style={{ fontSize: 64, marginTop: 30, opacity: p(frame, 50, 64) }}>Optimization by Simulated Annealing</div>
+          <div style={{ color: rgba(DIM), opacity: p(frame, 60, 74) }}>Science, vol. 220</div>
+          <div style={{ ...sans, fontSize: 56, marginTop: 36, color: rgba(GREEN), opacity: p(frame, 96, 110) }}>模拟退火</div>
         </div>
       )}
       {frame >= 180 && (
         <div
           style={{
-            position: 'absolute',
-            left: lerp(0, -700, formulaT),
-            right: lerp(0, 700, formulaT),
-            top: lerp(360, 70, formulaT),
-            textAlign: 'center',
-            transform: `scale(${lerp(1, 0.42, formulaT)})`,
-            fontFamily: FONT.latin,
-            fontStyle: 'italic',
-            color: rgba(WHITE),
-            opacity: p(frame, 184, 204) * (1 - p(frame, 800, 815)),
+            ...panel,
+            ...mono,
+            left: lerp(200, 120, shrink),
+            top: lerp(330, 104, shrink),
+            transform: `scale(${lerp(1, 0.55, shrink)})`,
+            transformOrigin: 'top left',
+            padding: '26px 0',
+            fontSize: 42,
+            lineHeight: 1.8,
+            whiteSpace: 'nowrap',
+            opacity: p(frame, 184, 198),
           }}
         >
-          <div style={{ fontSize: 150 }}>
-            P = e<sup style={{ fontSize: 84 }}>−Δ / T</sup>
+          <div style={{ padding: '0 40px', background: rgba(RED, 0.16), color: rgba(RED) }}>
+            −{'  '}if (那边更高) 走过去();
           </div>
-          <div
-            style={{
-              fontFamily: FONT.serif,
-              fontStyle: 'normal',
-              fontSize: 36,
-              color: rgba(WHITE, 0.7),
-              marginTop: 18,
-              letterSpacing: 2,
-              opacity: p(frame, 204, 222) * (1 - formulaT),
-            }}
-          >
+          <div style={{ padding: '0 40px', background: rgba(GREEN, 0.16), color: rgba(GREEN), opacity: p(frame, 204, 218) }}>
+            +{'  '}if (那边更高 || 随机数 &lt; e<sup style={{ fontSize: 28 }}>−Δ/T</sup>) 走过去();
+          </div>
+          <div style={{ ...sans, padding: '14px 40px 0', fontSize: 30, color: rgba(DIM), opacity: p(frame, 222, 236) }}>
             Δ：这一步变差了多少　　T：温度
           </div>
         </div>
       )}
-      {frame >= 270 && frame < 815 && (
-        <div style={{ ...hud, right: 150, top: 110, textAlign: 'right', opacity: p(frame, 276, 296) * (1 - p(frame, 800, 815)) }}>
-          <div style={{ fontSize: 30, color: rgba(WHITE, 0.55), letterSpacing: 4, fontFamily: FONT.sans }}>温度 T</div>
-          <div style={{ fontSize: 84, fontWeight: 700, color: rgba(mix(WHITE, HOT, clamp01(heat * 1.2))) }}>
-            {T.toFixed(3)}
-          </div>
-          <div style={{ width: 300, height: 6, background: rgba(WHITE, 0.12), marginTop: 10, marginLeft: 'auto' }}>
-            <div
-              style={{
-                width: `${clamp01(heat) * 100}%`,
-                height: 6,
-                marginLeft: 'auto',
-                background: rgba(mix(WHITE, HOT, clamp01(heat * 1.2))),
-              }}
-            />
-          </div>
-        </div>
-      )}
-      {frame >= 815 && (
-        <div style={{ ...hud, left: 130, top: 96 }}>
-          {[
-            { name: '只往上走', n: CLIMB_MAIN, at: 826, c: COLD, size: 72 },
-            { name: '允许变差', n: ANNEAL_MAIN, at: 866, c: HOT, size: 128 },
-          ].map((r) => (
-            <div key={r.name} style={{ display: 'flex', alignItems: 'baseline', gap: 28, opacity: p(frame, r.at, r.at + 16) }}>
-              <span style={{ fontFamily: FONT.serif, fontWeight: 700, fontSize: 42, width: 200 }}>{r.name}</span>
+      {frame >= 270 && (
+        <div style={{ ...mono, position: 'absolute', right: 120, top: 108, textAlign: 'right', opacity: p(frame, 276, 296) }}>
+          <div style={{ ...sans, fontSize: 30, color: rgba(DIM) }}>温度 T</div>
+          <div style={{ fontSize: 84, fontWeight: 700, color: rgba(mix(GREEN, YELLOW, clamp01(heat * 2.5))) }}>{T.toFixed(3)}</div>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 6 }}>
+            {Array.from({ length: 20 }, (_, i) => (
               <span
-                style={{
-                  fontSize: r.size,
-                  fontWeight: 700,
-                  color: rgba(r.c),
-                }}
-              >
-                {Math.round(r.n * ease(p(frame, r.at, r.at + 30)))}
-              </span>
-              <span style={{ fontSize: 32, color: rgba(WHITE, 0.55), fontFamily: FONT.sans }}>/ {N} 到达最高点</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </AbsoluteFill>
-  );
-};
-
-// ---- F：高潮。几百个粒子先被困在小山顶，加热后四处流动，再冷却到最高峰 ----
-const FIELD_START = 50;
-const fieldStep = (fr: number) => clamp01((fr - FIELD_START) / (540 - FIELD_START - 20)) * FIELD.steps;
-
-export const SceneF: React.FC = () => {
-  const frame = useCurrentFrame();
-  const draw: Draw = useCallback((ctx, fr) => drawField(ctx, fieldStep(fr), 1), []);
-  const t = FIELD_SIM.temp[Math.floor(fieldStep(frame))];
-  return (
-    <AbsoluteFill>
-      <Canvas draw={draw} />
-      <div style={{ ...hud, left: 130, top: 90, fontSize: 22, letterSpacing: 5, color: rgba(WHITE, 0.45) }}>
-        SIMULATED ANNEALING · n = {FIELD.n}
-      </div>
-      <div style={{ ...hud, right: 150, top: 80, fontSize: 36, color: rgba(mix(WHITE, HOT, clamp01(t * 1.4)), 0.9) }}>
-        T = {t.toFixed(2)}
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ---- G：收尾。金句、今天就能做的事、片尾卡 ----
-export const SceneG: React.FC = () => {
-  const frame = useCurrentFrame();
-  const draw: Draw = useCallback((ctx, fr) => {
-    const a = 1 - p(fr, 60, 100);
-    if (a > 0) drawField(ctx, FIELD.steps, a * 0.9);
-  }, []);
-  return (
-    <AbsoluteFill>
-      {frame < 100 && <Canvas draw={draw} />}
-      {frame >= 90 && frame < 270 && (
-        <BigText
-          out={268}
-          lines={[
-            { text: '只肯往上走的人，', at: 98, tone: 'hot' },
-            { text: '[到不了最高的地方]。', at: 150, size: 116, tone: 'hot' },
-          ]}
-        />
-      )}
-      {frame >= 270 && frame < 450 && (
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 330,
-            textAlign: 'center',
-            fontFamily: FONT.serif,
-            color: rgba(WHITE),
-            opacity: 1 - p(frame, 434, 448),
-          }}
-        >
-          <div style={{ fontSize: 68, fontWeight: 900, letterSpacing: 3 }}>
-            <Reveal text="今天，做一件[「暂时变差」]的事。" start={278} tone="hot" perChar={1.8} />
-          </div>
-          <div style={{ display: 'inline-block', textAlign: 'left', marginTop: 54, fontSize: 48, fontWeight: 700, lineHeight: 1.9 }}>
-            {['学一样你完全不会的。', '换一条没走过的路回家。'].map((s, i) => (
-              <div key={s} style={{ opacity: p(frame, 334 + i * 34, 350 + i * 34) }}>
-                <span style={{ color: rgba(HOT), marginRight: 22 }}>✓</span>
-                {s}
-              </div>
+                key={i}
+                style={{ width: 12, height: 22, background: i < Math.round(heat * 20) ? rgba(YELLOW) : rgba(TEXT, 0.12) }}
+              />
             ))}
           </div>
         </div>
       )}
-      {frame >= 450 && (
-        <AbsoluteFill style={{ opacity: 1 - p(frame, 598, 628), color: rgba(WHITE), textAlign: 'center' }}>
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 330 }}>
-            <div style={{ fontFamily: FONT.serif, fontWeight: 900, fontSize: 150, letterSpacing: 12 }}>
-              <Reveal text="概念[×]人生" start={456} tone="hot" perChar={4} />
-            </div>
-            <div
-              style={{
-                fontFamily: FONT.mono,
-                fontSize: 30,
-                letterSpacing: 8,
-                color: rgba(WHITE, 0.6),
-                marginTop: 30,
-                opacity: p(frame, 486, 504),
-              }}
-            >
-              No.01 · 局部最优 · LOCAL OPTIMUM
-            </div>
-            <div style={{ fontFamily: FONT.sans, fontWeight: 600, fontSize: 44, letterSpacing: 3, marginTop: 70 }}>
-              <Reveal text="关注我，下一期换一个概念看人生。" start={510} tone="hot" />
-            </div>
+    </AbsoluteFill>
+  );
+};
+
+// ---- F：回归测试。100 个格子各跑一遍退火，稳定在最高峰就变绿 ----
+const COLS = 10;
+const TW = 160;
+const TH = 62;
+const GAP = 8;
+const GX = 120;
+const GY = 196;
+const RUN0 = 70;
+
+const tileState = (i: number, fr: number): 'pass' | 'fail' | 'run' => {
+  if (fr < RUN0 - 20) return peakOf(CLIMB_END[i]) === MAIN ? 'pass' : 'fail';
+  const s = fr - RUN0;
+  if (SETTLE[i] >= 0 && s >= SETTLE[i]) return 'pass';
+  return s >= ANNEAL.steps ? 'fail' : 'run';
+};
+const stateRgb = { pass: GREEN, fail: RED, run: YELLOW };
+
+const drawMatrix: Draw = (ctx, fr) => {
+  const s = Math.max(0, Math.min(ANNEAL.steps, fr - RUN0));
+  for (let i = 0; i < N; i++) {
+    const appear = p(fr, i * 0.3, i * 0.3 + 10);
+    if (appear <= 0) continue;
+    const x0 = GX + (i % COLS) * (TW + GAP);
+    const y0 = GY + Math.floor(i / COLS) * (TH + GAP);
+    const c = stateRgb[tileState(i, fr)];
+    ctx.fillStyle = rgba(c, 0.12 * appear);
+    ctx.fillRect(x0, y0, TW, TH);
+    ctx.fillStyle = rgba(c, 0.9 * appear);
+    ctx.fillRect(x0, y0, 5, TH);
+    // 缩小的地形剪影
+    ctx.fillStyle = rgba(TEXT, 0.2 * appear);
+    for (let k = 0; k < 36; k++) {
+      const h = f((k + 0.5) / 36) * (TH - 16);
+      ctx.fillRect(x0 + 12 + k * 4, y0 + TH - 5 - h, 3, h);
+    }
+    const x = fr < RUN0 ? CLIMB_END[i] : ANNEAL_RUNS[i][s];
+    ctx.fillStyle = rgba(c, appear);
+    ctx.fillRect(x0 + 12 + x * 144 - 4, y0 + TH - 5 - f(x) * (TH - 16) - 9, 8, 8);
+  }
+};
+
+export const SceneF: React.FC = () => {
+  const frame = useCurrentFrame();
+  let pass = 0;
+  for (let i = 0; i < N; i++) if (tileState(i, frame) === 'pass') pass++;
+  const patched = frame >= RUN0 - 20;
+  const done = frame >= RUN0 + ANNEAL.steps;
+  return (
+    <AbsoluteFill>
+      <Canvas draw={drawMatrix} />
+      <div style={{ position: 'absolute', left: 120, right: 120, top: 100, display: 'flex', alignItems: 'baseline', ...sans }}>
+        <span style={{ fontSize: 40 }}>回归测试</span>
+        <span
+          style={{
+            ...mono,
+            fontSize: 26,
+            marginLeft: 24,
+            padding: '4px 16px',
+            borderRadius: 8,
+            color: '#131316',
+            background: rgba(patched ? GREEN : RED),
+          }}
+        >
+          {patched ? '补丁后' : '补丁前'}
+        </span>
+        <span style={{ ...mono, fontSize: 26, marginLeft: 24, color: rgba(DIM) }}>
+          {done ? '运行结束' : patched ? `运行中 step ${Math.max(0, frame - RUN0)}/${ANNEAL.steps}` : `${CLIMB_MAIN}/${N} 通过`}
+        </span>
+        <span style={{ flex: 1 }} />
+        <span style={{ ...mono, fontSize: 84, fontWeight: 700, color: rgba(patched ? GREEN : RED) }}>{pass}</span>
+        <span style={{ ...mono, fontSize: 40, marginLeft: 12, color: rgba(DIM) }}>/ {N}</span>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ---- G：结论。金句、临时方案、片尾 ----
+export const SceneG: React.FC = () => {
+  const frame = useCurrentFrame();
+  const draw: Draw = useCallback((ctx, fr) => {
+    const a = 1 - p(fr, 76, 90);
+    if (a <= 0) return;
+    drawTerrain(ctx, a);
+    // 从小山顶往下走，穿过山谷，朝最高的山去
+    const t = ease(p(fr, 6, 84));
+    agent(ctx, colOf(lerp(PEAKS[3][0], 0.66, t)), 0, 26, mix(YELLOW, GREEN, t), a);
+  }, []);
+  const todo = ['点一家没点过的外卖', '换一条没走过的路回家'];
+  return (
+    <AbsoluteFill>
+      {frame < 90 && <Canvas draw={draw} />}
+      {frame >= 90 && frame < 270 && (
+        <div style={{ position: 'absolute', left: 200, top: 300, ...sans, fontSize: 116, lineHeight: 1.55, letterSpacing: 4, opacity: 1 - p(frame, 256, 268) }}>
+          <div>
+            <Typed text="只肯往上走的人，" start={96} perChar={2.6} cursor={false} />
           </div>
-        </AbsoluteFill>
+          <div>
+            <Typed text="[到不了最高的地方]。" start={150} perChar={2.6} tone="fix" cursor={false} />
+          </div>
+        </div>
+      )}
+      {frame >= 270 && frame < 450 && (
+        <div style={{ ...panel, ...sans, left: 300, top: 220, width: 1320, padding: '44px 60px', boxSizing: 'border-box', opacity: p(frame, 270, 282) * (1 - p(frame, 436, 448)) }}>
+          <div style={{ ...mono, fontSize: 28, color: rgba(YELLOW) }}>临时方案 WORKAROUND</div>
+          <div style={{ fontSize: 72, marginTop: 20, letterSpacing: 2 }}>
+            <Rich text="今天，做一件[「暂时变差」]的事。" tone="fix" />
+          </div>
+          <div style={{ fontSize: 50, lineHeight: 1.9, marginTop: 30 }}>
+            {todo.map((s, i) => {
+              const on = frame >= 330 + i * 36;
+              return (
+                <div key={s} style={{ display: 'flex', alignItems: 'center', opacity: p(frame, 296 + i * 16, 308 + i * 16) }}>
+                  <span
+                    style={{
+                      width: 44,
+                      height: 44,
+                      marginRight: 26,
+                      borderRadius: 8,
+                      border: `3px solid ${rgba(on ? GREEN : DIM)}`,
+                      background: on ? rgba(GREEN) : 'transparent',
+                      color: '#131316',
+                      fontSize: 36,
+                      lineHeight: '44px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {on ? '✓' : ''}
+                  </span>
+                  {s}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {frame >= 450 && (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 250, textAlign: 'center', ...sans, opacity: p(frame, 450, 462) }}>
+          <div style={{ fontSize: 150, letterSpacing: 10, WebkitTextStroke: `2px ${rgba(TEXT)}` }}>
+            人生 <span style={{ color: rgba(RED), WebkitTextStroke: `2px ${rgba(RED)}` }}>bug</span> 图鉴
+          </div>
+          <div style={{ ...mono, fontSize: 34, marginTop: 30, color: rgba(DIM), opacity: p(frame, 474, 488) }}>
+            BUG-001 局部最优 · <span style={{ color: rgba(GREEN) }}>已收录</span> · {ANNEAL_MAIN}/{N} 可缓解
+          </div>
+          <div style={{ ...mono, fontSize: 34, marginTop: 16, color: rgba(DIM), opacity: p(frame, 500, 514) }}>
+            BUG-002 · <span style={{ color: rgba(YELLOW) }}>待收录</span>
+          </div>
+        </div>
       )}
     </AbsoluteFill>
   );

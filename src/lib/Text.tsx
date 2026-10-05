@@ -1,14 +1,15 @@
 import React from 'react';
 import { useCurrentFrame } from 'remotion';
-import { ease, p } from './math';
-import { BAR, COLD, FONT, HOT, INK, WHITE, rgba, type Rgb } from './theme';
+import { p } from './math';
+import { BAR, FONT, GREEN, RED, TEXT, rgba } from './theme';
 
-export type Tone = 'cold' | 'hot';
-const toneRgb = (tone: Tone): Rgb => (tone === 'hot' ? HOT : COLD);
+// bug = 红色波浪线（像编辑器里的报错），fix = 绿色
+export type Tone = 'bug' | 'fix';
+const toneRgb = (tone: Tone) => (tone === 'fix' ? GREEN : RED);
 
 type Seg = { chars: string[]; hi: boolean; idx: number };
 
-// 文案里用 [方括号] 标出要划重点的词
+// 文案里用 [方括号] 标出重点词
 const parse = (text: string): Seg[] => {
   const segs: Seg[] = [];
   let hi = false;
@@ -31,122 +32,101 @@ const parse = (text: string): Seg[] => {
   return segs;
 };
 
-// 逐字淡入的一行字；重点词出现后，一道荧光笔从左划到右，字变成深色。
-// start 是这一行开始出现的帧（相对当前 Sequence）。
-export const Reveal: React.FC<{
-  text: string;
-  start: number;
-  tone?: Tone;
-  perChar?: number;
-  style?: React.CSSProperties;
-}> = ({ text, start, tone = 'cold', perChar = 1.3, style }) => {
-  const frame = useCurrentFrame();
+export const textLength = (text: string) => text.replace(/[[\]]/g, '').length;
+
+// shown：只显示前多少个字，用来做打字效果
+export const Rich: React.FC<{ text: string; tone?: Tone; shown?: number }> = ({
+  text,
+  tone = 'bug',
+  shown = Infinity,
+}) => {
   const c = toneRgb(tone);
   return (
-    <span style={style}>
+    <>
       {parse(text).map((seg) => {
-        const t0 = start + seg.idx * perChar;
-        const n = seg.chars.length;
-        const swipe = seg.hi ? ease(p(frame, t0 + n * perChar * 0.5, t0 + n * perChar * 0.5 + 12)) : 0;
-        const chars = seg.chars.map((ch, i) => (
-          <span
-            key={i}
-            style={{
-              position: 'relative',
-              opacity: p(frame, t0 + i * perChar, t0 + i * perChar + 9),
-              color: swipe > (i + 0.5) / n ? rgba(INK) : undefined,
-            }}
-          >
-            {ch}
-          </span>
-        ));
-        if (!seg.hi) return <React.Fragment key={seg.idx}>{chars}</React.Fragment>;
+        const str = seg.chars.slice(0, Math.max(0, Math.floor(shown) - seg.idx)).join('');
+        if (!str) return null;
+        if (!seg.hi) return <span key={seg.idx}>{str}</span>;
         return (
           <span
             key={seg.idx}
-            style={{ position: 'relative', display: 'inline-block', padding: '0 0.14em', margin: '0 0.05em' }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: '10%',
-                bottom: '4%',
-                width: `${swipe * 100}%`,
-                background: rgba(c),
-                borderRadius: 5,
-                transform: 'skewX(-7deg)',
-              }}
-            />
-            {chars}
-          </span>
-        );
-      })}
-    </span>
-  );
-};
-
-export type CaptionLine = { bar: number; len?: number; text: string; tone?: Tone };
-
-export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
-  const frame = useCurrentFrame();
-  return (
-    <>
-      {lines.map((l) => {
-        const start = l.bar * BAR + 4;
-        const end = (l.bar + (l.len ?? 1)) * BAR - 6;
-        if (frame < start || frame >= end) return null;
-        return (
-          <div
-            key={l.bar}
             style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: 912,
-              textAlign: 'center',
-              fontFamily: FONT.sans,
-              fontWeight: 600,
-              fontSize: 48,
-              letterSpacing: 3,
-              color: rgba(WHITE),
-              opacity: 1 - p(frame, end - 9, end),
+              color: rgba(c),
+              textDecoration: `underline wavy ${rgba(c)}`,
+              textDecorationThickness: '0.06em',
+              textUnderlineOffset: '0.22em',
             }}
           >
-            <Reveal text={l.text} start={start} tone={l.tone} />
-          </div>
+            {str}
+          </span>
         );
       })}
     </>
   );
 };
 
-// 居中的大字金句。每行各自的出现帧，整体在 out 帧前淡出。
-export const BigText: React.FC<{
-  lines: { text: string; at: number; size?: number; tone?: Tone }[];
-  out: number;
-  top?: number;
-}> = ({ lines, out, top = 360 }) => {
+// 逐字打出的一行，末尾带光标
+export const Typed: React.FC<{ text: string; start: number; tone?: Tone; perChar?: number; cursor?: boolean }> = ({
+  text,
+  start,
+  tone,
+  perChar = 1.1,
+  cursor = true,
+}) => {
   const frame = useCurrentFrame();
+  const shown = (frame - start) / perChar;
+  const done = shown >= textLength(text);
+  return (
+    <>
+      <Rich text={text} tone={tone} shown={shown} />
+      {cursor && frame >= start && (
+        <span
+          style={{
+            display: 'inline-block',
+            width: '0.5em',
+            height: '1em',
+            marginLeft: '0.12em',
+            verticalAlign: '-0.12em',
+            background: rgba(TEXT, done && frame % 30 >= 16 ? 0 : 0.85),
+          }}
+        />
+      )}
+    </>
+  );
+};
+
+export type CaptionLine = { bar: number; len?: number; text: string; tone?: Tone };
+
+// 底部的命令行：旁白一句一句打出来
+export const Console: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
+  const frame = useCurrentFrame();
+  const l = lines.find((x) => frame >= x.bar * BAR + 3 && frame < (x.bar + (x.len ?? 1)) * BAR - 4);
   return (
     <div
       style={{
         position: 'absolute',
         left: 0,
         right: 0,
-        top,
-        textAlign: 'center',
-        fontFamily: FONT.serif,
-        fontWeight: 900,
-        color: rgba(WHITE),
-        opacity: 1 - p(frame, out - 14, out),
+        top: 918,
+        height: 162,
+        borderTop: '2px solid #32323c',
+        background: '#0e0e11',
+        display: 'flex',
+        alignItems: 'center',
+        paddingLeft: 120,
+        fontFamily: FONT.sans,
+        fontWeight: 600,
+        fontSize: 50,
+        letterSpacing: 2,
+        color: rgba(TEXT),
       }}
     >
-      {lines.map((l, i) => (
-        <div key={i} style={{ fontSize: l.size ?? 92, lineHeight: 1.6, letterSpacing: 4 }}>
-          <Reveal text={l.text} start={l.at} tone={l.tone} perChar={2.2} />
-        </div>
-      ))}
+      <span style={{ fontFamily: FONT.mono, color: rgba(GREEN), marginRight: 28 }}>›</span>
+      {l && (
+        <span style={{ opacity: 1 - p(frame, (l.bar + (l.len ?? 1)) * BAR - 10, (l.bar + (l.len ?? 1)) * BAR - 4) }}>
+          <Typed key={l.bar} text={l.text} start={l.bar * BAR + 3} tone={l.tone} />
+        </span>
+      )}
     </div>
   );
 };

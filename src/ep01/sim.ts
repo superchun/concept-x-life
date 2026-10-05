@@ -73,8 +73,17 @@ export const CLIMB_END = CLIMB.map((xs) => xs[CLIMB_STEPS]);
 export const CLIMB_COUNTS = PEAKS.map((_, k) => CLIMB_END.filter((x) => peakOf(x) === k).length);
 export const CLIMB_MAIN = CLIMB_COUNTS[MAIN];
 
-export const ANNEAL_END = STARTS.map((x, i) => annealPath(x, 1000 + i).xs[ANNEAL.steps]);
+// 同样的 100 个起点，换成退火规则重跑
+export const ANNEAL_RUNS = STARTS.map((x, i) => annealPath(x, 1000 + i).xs);
+export const ANNEAL_END = ANNEAL_RUNS.map((xs) => xs[ANNEAL.steps]);
 export const ANNEAL_MAIN = ANNEAL_END.filter((x) => peakOf(x) === MAIN).length;
+// 每个点从哪一步起一直留在最高峰上；最终没到的记 -1
+export const SETTLE = ANNEAL_RUNS.map((xs) => {
+  if (peakOf(xs[ANNEAL.steps]) !== MAIN) return -1;
+  let s = ANNEAL.steps;
+  while (s > 0 && peakOf(xs[s - 1]) === MAIN) s--;
+  return s;
+});
 
 // 主角：从最靠近大山的那座小山顶出发。种子由 scripts/tune.ts 挑选。
 export const HERO_START = PEAKS[3][0];
