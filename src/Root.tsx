@@ -5,6 +5,7 @@ import { Cover, CoverTall } from './ep01/Cover';
 import { Ep01 } from './ep01/Ep01';
 import { TOTAL_BARS } from './ep01/script';
 import { Cast } from './ep02/Cast';
+import { Cover as Cover02, CoverTall as CoverTall02 } from './ep02/Cover';
 import { Ep02 } from './ep02/Ep02';
 import { TOTAL_BARS as EP02_BARS } from './ep02/script';
 import { BAR, FPS, H, W } from './lib/theme';
@@ -15,6 +16,8 @@ export const Root: React.FC = () => (
     <Still id="Ep01Cover" component={Cover} width={W} height={H} />
     <Still id="Ep01CoverTall" component={CoverTall} width={H} height={W} />
     <Composition id="Ep02" component={Ep02} durationInFrames={EP02_BARS * BAR} fps={FPS} width={W} height={H} />
+    <Still id="Ep02Cover" component={Cover02} width={W} height={H} />
+    <Still id="Ep02CoverTall" component={CoverTall02} width={H} height={W} />
     <Still id="Ep02Cast" component={Cast} width={W} height={H} />
   </>
 );
